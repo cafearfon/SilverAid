@@ -33,10 +33,17 @@ python -m http.server 8000
 - El asistente usa reglas locales; en producción se conectaría a un modelo de lenguaje.
 - Los voluntarios son ficticios.
 
+## Identidad visual
+
+- Colores: marrón `#92400E` (principal), ocre `#D6A05C` (acento), crema `#F5E6C8` (fondos).
+- Tipografía: [Poppins](https://fonts.google.com/specimen/Poppins) (Google Fonts).
+- Logos en `assets/brand/`: horizontal a color, negativo (usado en alto contraste), símbolo e ícono de app (favicon).
+
 ## Estructura
 
 ```
 index.html
+assets/brand/      logos e ícono
 css/styles.css
 js/store.js        estado, persistencia y utilidades
 js/meds.js         1. medicamentos

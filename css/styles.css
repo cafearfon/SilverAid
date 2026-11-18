@@ -1,54 +1,65 @@
+/* Identidad SilverAid
+   Marrón  #92400E · Ocre #D6A05C · Crema #F5E6C8 · Tipografía Poppins */
 :root {
-  --bg: #f6f4ef;
-  --surface: #ffffff;
-  --text: #1f2933;
-  --muted: #5b6672;
-  --border: #e2ddd3;
-  --primary: #0f766e;
-  --primary-ink: #ffffff;
-  --primary-soft: #e0f2ef;
-  --warn: #b45309;
-  --warn-soft: #fef3c7;
-  --danger: #c62828;
-  --danger-soft: #fde8e8;
-  --ok: #2e7d32;
-  --ok-soft: #e6f4e7;
-  --radius: 14px;
-  --shadow: 0 1px 3px rgba(0,0,0,.06), 0 4px 14px rgba(0,0,0,.05);
+  --brand-brown: #92400E;
+  --brand-ochre: #D6A05C;
+  --brand-cream: #F5E6C8;
+
+  --bg: #FBF5EA;
+  --surface: #FFFDF8;
+  --text: #3B1F0B;
+  --muted: #7A5534;
+  --border: #EAD8B8;
+  --primary: var(--brand-brown);
+  --primary-ink: #FFF8EC;
+  --primary-soft: var(--brand-cream);
+  --accent: var(--brand-ochre);
+  --warn: #9A5B10;
+  --warn-soft: #FBEBCB;
+  --danger: #C62828;
+  --danger-soft: #FCE6E2;
+  --ok: #2E7D32;
+  --ok-soft: #E7F2E3;
+  --radius: 16px;
+  --shadow: 0 1px 3px rgba(146,64,14,.08), 0 6px 18px rgba(146,64,14,.07);
+  --font: "Poppins", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   font-size: 18px;
 }
 body.big { font-size: 22px; }
 :root:has(body.big) { font-size: 22px; }
 
+/* Alto contraste: basado en la versión «negativo» del logo */
 body.contrast {
-  --bg: #000;
-  --surface: #000;
-  --text: #fff;
-  --muted: #ffe66d;
-  --border: #fff;
-  --primary: #ffe66d;
-  --primary-ink: #000;
-  --primary-soft: #222;
-  --warn: #ffb74d;
-  --warn-soft: #222;
-  --danger: #ff5252;
-  --danger-soft: #220000;
-  --ok: #69f0ae;
-  --ok-soft: #002210;
+  --bg: #1A0B02;
+  --surface: #1A0B02;
+  --text: #FFF6E3;
+  --muted: #F5E6C8;
+  --border: #F5E6C8;
+  --primary: #F0B46A;
+  --primary-ink: #1A0B02;
+  --primary-soft: #3A1A06;
+  --accent: #F0B46A;
+  --warn: #FFC970;
+  --warn-soft: #3A2405;
+  --danger: #FF6B5E;
+  --danger-soft: #3A0A05;
+  --ok: #7EE08A;
+  --ok-soft: #0D2A10;
   --shadow: none;
 }
 
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font);
   font-size: 1rem;
-  line-height: 1.5;
+  line-height: 1.55;
   background: var(--bg);
   color: var(--text);
 }
-h1 { font-size: 1.8rem; margin: .2em 0 .3em; }
-h2 { font-size: 1.2rem; margin: 0 0 .6em; }
+h1, h2, h3, .big-text { font-family: var(--font); letter-spacing: -.01em; }
+h1 { font-size: 1.8rem; font-weight: 800; margin: .2em 0 .3em; color: var(--primary); }
+h2 { font-size: 1.15rem; font-weight: 700; margin: 0 0 .6em; }
 a { color: var(--primary); }
 .muted { color: var(--muted); }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -58,11 +69,22 @@ button, input, select, textarea { font: inherit; color: inherit; }
   display: flex; flex-wrap: wrap; gap: .6rem; align-items: center; justify-content: space-between;
   padding: .7rem 1rem; background: var(--surface); border-bottom: 1px solid var(--border);
 }
-.brand { font-weight: 700; font-size: 1.3rem; display: flex; align-items: center; gap: .5rem; }
-.logo {
-  display: inline-grid; place-items: center; width: 2.1rem; height: 2.1rem; border-radius: 50%;
-  background: linear-gradient(135deg, #9ca3af, #e5e7eb); color: #1f2933; font-size: .85rem; letter-spacing: .5px;
+.brand { display: flex; align-items: center; border-radius: 8px; }
+.logo { display: block; height: 2.6rem; width: auto; }
+.logo-negativo { display: none; }
+body.contrast .logo-color { display: none; }
+body.contrast .logo-negativo { display: block; }
+
+/* Bloque de bienvenida con el símbolo de la marca */
+.hero {
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  background: var(--primary-soft); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 1.2rem 1.4rem; margin-bottom: 1rem;
 }
+.hero h1 { margin: 0; }
+.hero p { margin: .2rem 0 0; color: var(--muted); font-weight: 500; }
+.hero-symbol { width: 5.5rem; height: auto; flex: none; }
+body.contrast .hero-symbol { filter: brightness(1.6) saturate(.8); }
 .a11y { display: flex; flex-wrap: wrap; gap: .4rem; }
 
 .tabs {
@@ -153,12 +175,13 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 .dose .info { flex: 1; min-width: 150px; }
 .dose .info strong { display: block; font-size: 1.1rem; }
 .dose.taken { border-left-color: var(--ok); }
-.dose.due { border-left-color: var(--warn); background: var(--warn-soft); }
+.dose.due { border-left-color: var(--accent); background: var(--warn-soft); }
+.dose.pending { border-left-color: var(--accent); }
 .dose.missed { border-left-color: var(--danger); }
 .badge { display: inline-block; padding: .15rem .6rem; border-radius: 999px; font-size: .8rem; font-weight: 700; }
 .badge.taken { background: var(--ok-soft); color: var(--ok); }
 .badge.pending { background: var(--primary-soft); color: var(--primary); }
-.badge.due { background: var(--warn); color: #fff; }
+.badge.due { background: var(--accent); color: #3B1F0B; }
 .badge.missed { background: var(--danger-soft); color: var(--danger); }
 
 /* ---------- Turnos de visita ---------- */
@@ -171,7 +194,7 @@ input:focus, select:focus, textarea:focus, button:focus-visible { outline: 3px s
 }
 .visit-grid td button:hover { background: var(--primary-soft); }
 .visit-grid td button.filled { background: var(--primary); color: var(--primary-ink); }
-.visit-grid td.today { outline: 3px solid var(--warn); outline-offset: -3px; }
+.visit-grid td.today { outline: 3px solid var(--accent); outline-offset: -3px; }
 
 /* ---------- SOS ---------- */
 .sos-wrap { display: grid; place-items: center; padding: 1.5rem 0 2rem; }
@@ -216,8 +239,8 @@ body.contrast .btn-sos { border-color: #fff; }
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; box-shadow: var(--shadow);
 }
 .vol .avatar {
-  width: 3rem; height: 3rem; border-radius: 50%; display: grid; place-items: center; font-weight: 700;
-  background: var(--primary-soft); color: var(--primary); float: left; margin-right: .7rem;
+  width: 3rem; height: 3rem; border-radius: 14px; display: grid; place-items: center; font-weight: 700;
+  background: var(--accent); color: #3B1F0B; float: left; margin-right: .7rem;
 }
 .vol h3 { margin: 0; font-size: 1.05rem; }
 .vol .tags { clear: both; display: flex; flex-wrap: wrap; gap: .3rem; padding-top: .6rem; }
@@ -230,15 +253,17 @@ body.contrast .btn-sos { border-color: #fff; }
 /* ---------- Avisos emergentes ---------- */
 .toasts { position: fixed; bottom: 1rem; right: 1rem; left: 1rem; display: grid; justify-items: end; gap: .5rem; z-index: 60; pointer-events: none; }
 .toast {
-  pointer-events: auto; max-width: 420px; background: #1f2933; color: #fff; padding: .8rem 1rem; border-radius: 12px;
-  box-shadow: 0 6px 20px rgba(0,0,0,.25); border-left: 6px solid var(--primary); animation: slide .25s ease-out;
+  pointer-events: auto; max-width: 420px; background: #3B1F0B; color: #FFF6E3; padding: .8rem 1rem; border-radius: 12px;
+  box-shadow: 0 6px 20px rgba(59,31,11,.3); border-left: 6px solid var(--brand-ochre); animation: slide .25s ease-out;
 }
-.toast.warn { border-left-color: #f59e0b; }
+.toast.warn { border-left-color: #F0B46A; }
 .toast.danger { border-left-color: #ef4444; }
 .toast.ok { border-left-color: #22c55e; }
 @keyframes slide { from { transform: translateY(20px); opacity: 0; } }
 
 @media (max-width: 600px) {
   h1 { font-size: 1.5rem; }
+  .logo { height: 2.2rem; }
+  .hero-symbol { width: 4rem; }
   .msg { max-width: 92%; }
 }

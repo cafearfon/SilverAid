@@ -4,11 +4,20 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>SilverAid — Demo</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="css/styles.css">
 </head>
 <body>
   <header class="topbar">
-    <div class="brand"><span class="logo" aria-hidden="true">SA</span> SilverAid</div>
+    <a class="brand" href="#home" aria-label="SilverAid, ir al inicio">
+      <img class="logo logo-color" src="assets/brand/silveraid-horizontal-color.svg" alt="SilverAid" width="187" height="48">
+      <img class="logo logo-negativo" src="assets/brand/silveraid-horizontal-negativo.svg" alt="SilverAid" width="187" height="48">
+    </a>
     <div class="a11y">
       <button id="btn-big" class="chip" aria-pressed="false">A+ Texto grande</button>
       <button id="btn-contrast" class="chip" aria-pressed="false">◐ Alto contraste</button>
@@ -28,8 +37,13 @@
   <main>
     <!-- ============ INICIO ============ -->
     <section id="view-home" class="view active">
-      <h1 id="greeting">Hola</h1>
-      <p class="muted" id="today-date"></p>
+      <div class="hero">
+        <div>
+          <h1 id="greeting">Hola</h1>
+          <p id="today-date"></p>
+        </div>
+        <img class="hero-symbol" src="assets/brand/silveraid-simbolo-color.svg" alt="" width="112" height="112">
+      </div>
       <div class="grid">
         <article class="card"><h2>💊 Próxima dosis</h2><div id="home-next-dose"></div></article>
         <article class="card"><h2>📅 Próxima cita</h2><div id="home-next-appt"></div></article>
