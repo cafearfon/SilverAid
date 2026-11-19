@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SilverAid — Iniciar sesión</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+</head>
+<body class="login-page">
+  <main class="login-wrap">
+    <a href="index.html" class="login-logo-link" aria-label="SilverAid, volver a la página de inicio">
+      <img class="login-logo" src="assets/brand/silveraid-vertical-color.svg" alt="SilverAid" width="200" height="116">
+    </a>
+
+    <section class="card login-card" id="panel-login">
+      <h1>Iniciar sesión</h1>
+      <form id="form-login" class="form" novalidate>
+        <label>Usuario <input name="username" autocomplete="username" required autofocus></label>
+        <label>Contraseña
+          <span class="pw-field">
+            <input name="password" type="password" autocomplete="current-password" required>
+            <button type="button" class="btn ghost small pw-toggle" aria-label="Mostrar contraseña">Ver</button>
+          </span>
+        </label>
+        <p class="form-error" role="alert" hidden></p>
+        <button class="btn big">Entrar</button>
+      </form>
+      <p class="login-switch">¿No tiene cuenta? <button type="button" class="link-btn" data-show="register">Crear una cuenta</button></p>
+    </section>
+
+    <section class="card login-card" id="panel-register" hidden>
+      <h1>Crear cuenta</h1>
+      <form id="form-register" class="form" novalidate>
+        <label>Su nombre <input name="name" autocomplete="name" required placeholder="Ej. Carmen"></label>
+        <fieldset class="role-pick">
+          <legend>Soy…</legend>
+          <label><input type="radio" name="role" value="usuario" checked> <span><strong>👵 Adulto mayor</strong><small>Uso SilverAid para mi día a día</small></span></label>
+          <label><input type="radio" name="role" value="cliente"> <span><strong>👨‍👩‍👧 Familiar responsable</strong><small>Cuido de un familiar mayor</small></span></label>
+          <label><input type="radio" name="role" value="cuidador"> <span><strong>🧑‍⚕️ Cuidador/a</strong><small>Ofrezco cuidados y acompañamiento</small></span></label>
+        </fieldset>
+        <label>Usuario <input name="username" autocomplete="username" required placeholder="Letras y números, sin espacios"></label>
+        <label>Contraseña
+          <span class="pw-field">
+            <input name="password" type="password" autocomplete="new-password" required>
+            <button type="button" class="btn ghost small pw-toggle" aria-label="Mostrar contraseña">Ver</button>
+          </span>
+        </label>
+        <label>Repita la contraseña <input name="password2" type="password" autocomplete="new-password" required></label>
+        <p class="form-error" role="alert" hidden></p>
+        <button class="btn big">Crear cuenta y entrar</button>
+      </form>
+      <p class="login-switch">¿Ya tiene cuenta? <button type="button" class="link-btn" data-show="login">Iniciar sesión</button></p>
+    </section>
+
+    <a href="index.html" class="back-link">← Volver a la página de inicio</a>
+  </main>
+
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      const panels = { login: document.getElementById('panel-login'), register: document.getElementById('panel-register') };
+
+      function show(name) {
+        Object.entries(panels).forEach(([k, el]) => { el.hidden = k !== name; });
+        panels[name].querySelector('input').focus();
+      }
+      function showError(form, msg) {
+        const p = form.querySelector('.form-error');
+        p.textContent = msg;
+        p.hidden = !msg;
+      }
+      function enter(data) {
+        SAAuth.set({ token: data.token, username: data.user.username, name: data.user.name, role: data.user.role });
+        location.replace(SAAuth.home(data.user.role));
+      }
+
+      document.querySelectorAll('[data-show]').forEach((b) => b.addEventListener('click', () => show(b.dataset.show)));
+      document.querySelectorAll('.pw-toggle').forEach((b) => b.addEventListener('click', () => {
+        const input = b.previousElementSibling;
+        const visible = input.type === 'text';
+        input.type = visible ? 'password' : 'text';
+        b.textContent = visible ? 'Ver' : 'Ocultar';
+        b.setAttribute('aria-label', visible ? 'Mostrar contraseña' : 'Ocultar contraseña');
+      }));
+
+      document.getElementById('form-login').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        if (!f.username.value.trim() || !f.password.value) return showError(f, 'Escriba su usuario y su contraseña.');
+        showError(f, '');
+        try {
+          enter(await SAAuth.api('/api/login', { method: 'POST', body: { username: f.username.value.trim(), password: f.password.value } }));
+        } catch (err) {
+          showError(f, err.message);
+          f.password.select();
+        }
+      });
+
+      document.getElementById('form-register').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const f = e.target;
+        if (f.password.value !== f.password2.value) return showError(f, 'Las contraseñas no coinciden.');
+        showError(f, '');
+        const body = { name: f.elements.name.value.trim(), username: f.username.value.trim(), password: f.password.value, role: f.elements.role.value };
+        try {
+          await SAAuth.api('/api/register', { method: 'POST', body });
+          enter(await SAAuth.api('/api/login', { method: 'POST', body }));
+        } catch (err) {
+          showError(f, err.message);
+        }
+      });
+
+      // login.html#registro abre «Crear cuenta»; #registro-cliente (o -usuario, -cuidador) además elige el rol.
+      const m = location.hash.match(/^#registro(?:-(usuario|cliente|cuidador))?$/);
+      if (m) {
+        show('register');
+        if (m[1]) document.querySelector(`#form-register input[name="role"][value="${m[1]}"]`).checked = true;
+      }
+
+      // Si ya hay una sesión válida, entra directamente.
+      if (SAAuth.get()) {
+        SAAuth.api('/api/me').then(({ user }) => location.replace(SAAuth.home(user.role))).catch(() => SAAuth.clear());
+      }
+    })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SilverAid — Administración</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/auth.js"></script>
+  <script>
+    (function () {
+      const s = SAAuth.get();
+      if (!s) location.replace('login.html');
+      else if (s.role !== 'admin') location.replace('app.html');
+    })();
+  </script>
+</head>
+<body class="admin-page">
+  <header class="topbar">
+    <a class="brand" href="admin.html" aria-label="SilverAid, administración">
+      <img class="logo logo-color" src="assets/brand/silveraid-horizontal-color.svg" alt="SilverAid" width="187" height="48">
+      <span class="admin-badge">Administración</span>
+    </a>
+    <div class="a11y">
+      <a class="chip" href="app.html">Ver aplicación ↗</a>
+      <span class="chip user-chip" id="user-chip"></span>
+      <button id="btn-logout" class="chip">Salir ⎋</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Secciones de administración">
+    <button data-tab="sos" class="active">🚨 Llamadas SOS <span class="count" id="count-sos" hidden></span></button>
+    <button data-tab="pending">⏳ Altas pendientes <span class="count" id="count-pending" hidden></span></button>
+    <button data-tab="caregivers">🧑‍⚕️ Cuidadores</button>
+    <button data-tab="users">👥 Usuarios</button>
+  </nav>
+
+  <main>
+    <!-- ============ 3. LLAMADAS DEL BOTÓN DE PÁNICO ============ -->
+    <section id="tab-sos" class="view active">
+      <div class="card-head">
+        <h1>🚨 Llamadas del botón de pánico</h1>
+        <span class="muted live" id="sos-updated"></span>
+      </div>
+      <p class="muted">Se actualiza sola cada 10 segundos y suena un aviso cuando entra una llamada nueva. Registro en <code>data/sos.txt</code>.</p>
+      <div class="chips" id="sos-filter" role="group" aria-label="Filtrar llamadas">
+        <button class="chip" data-filter="pendiente" aria-pressed="true">Pendientes</button>
+        <button class="chip" data-filter="atendida" aria-pressed="false">Atendidas</button>
+        <button class="chip" data-filter="" aria-pressed="false">Todas</button>
+      </div>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Fecha y hora</th><th>Persona</th><th>Motivo</th><th>Ubicación</th><th>Estado</th><th>Atención</th></tr></thead>
+          <tbody id="sos-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 1. ALTAS PENDIENTES ============ -->
+    <section id="tab-pending" class="view">
+      <h1>⏳ Altas pendientes</h1>
+      <p class="muted">Adultos mayores registrados por un familiar responsable (cliente). No pueden iniciar sesión hasta que les dé de alta.</p>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Adulto mayor</th><th>Usuario</th><th>Registrado por</th><th>Fecha de registro</th><th>Acciones</th></tr></thead>
+          <tbody id="pending-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ 2. CUIDADORES ============ -->
+    <section id="tab-caregivers" class="view">
+      <h1>🧑‍⚕️ Cuidadores</h1>
+      <p class="muted">Fichas guardadas en <code>data/caregivers.txt</code>. Aparecen en la red de cuidadores de la aplicación.</p>
+
+      <h2>Cuidadores registrados <span class="muted" id="cg-count"></span></h2>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Nombre</th><th>Documento</th><th>Contacto</th><th>Perfil</th><th>Servicios</th><th>Disponibilidad</th><th>Cuenta</th><th></th></tr></thead>
+          <tbody id="cg-body"></tbody>
+        </table>
+      </div>
+
+      <button class="btn" id="btn-toggle-cg" aria-expanded="false" aria-controls="cg-form-card">➕ Registrar cuidador</button>
+
+      <article class="card cg-form-card" id="cg-form-card" hidden>
+        <h2 id="cg-form-title">Registrar cuidador</h2>
+        <form id="form-caregiver" class="form">
+          <fieldset class="form-section">
+            <legend>Información personal</legend>
+            <div class="form-row">
+              <label>Nombre completo * <input name="name" required maxlength="80"></label>
+              <label>Documento de identidad * <input name="document" required maxlength="30"></label>
+              <label>Fecha de nacimiento <input name="birthdate" type="date"></label>
+            </div>
+            <div class="form-row">
+              <label>Teléfono * <input name="phone" type="tel" required maxlength="30"></label>
+              <label>Correo electrónico <input name="email" type="email" maxlength="80"></label>
+            </div>
+            <div class="form-row">
+              <label>Dirección <input name="address" maxlength="120"></label>
+              <label>Barrio o zona <input name="zone" maxlength="40" placeholder="Ej. Centro"></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Perfil profesional</legend>
+            <div class="form-row">
+              <label>Formación o cargo <input name="title" maxlength="60" placeholder="Ej. Auxiliar de enfermería"></label>
+              <label>Años de experiencia <input name="experience" type="number" min="0" max="60" value="0"></label>
+            </div>
+            <div class="check-group" role="group" aria-label="Servicios que ofrece">
+              <span class="check-label">Servicios que ofrece *</span>
+              <label><input type="checkbox" name="skills" value="compania"> Compañía</label>
+              <label><input type="checkbox" name="skills" value="compras"> Compras</label>
+              <label><input type="checkbox" name="skills" value="tecnologia"> Tecnología</label>
+              <label><input type="checkbox" name="skills" value="tramites"> Trámites</label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Disponibilidad semanal *</legend>
+            <p class="muted small-text">Haga clic en las casillas o arrastre para marcar varias. Pulse un día o una hora para marcar toda la columna o la fila.</p>
+            <div class="avail-tools">
+              <button type="button" class="chip" data-preset="manana">Lun–Vie 08–12</button>
+              <button type="button" class="chip" data-preset="tarde">Lun–Vie 14–18</button>
+              <button type="button" class="chip" data-preset="limpiar">Limpiar</button>
+              <span class="muted" id="avail-summary" aria-live="polite"></span>
+            </div>
+            <div class="table-wrap" id="avail-editor"></div>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Acceso a SilverAid</legend>
+            <div id="cg-account-new">
+              <label class="switch"><input type="checkbox" name="createAccount" id="cg-account"> Crear cuenta de acceso (rol cuidador)</label>
+              <div class="form-row" id="cg-account-fields" hidden>
+                <label>Usuario <input name="username" pattern="[A-Za-z0-9_.\-]{3,30}"></label>
+                <label>Contraseña <input name="password" minlength="4"></label>
+              </div>
+            </div>
+            <div id="cg-account-existing" hidden>
+              <p class="small-text">Cuenta de acceso: <strong id="cg-account-name"></strong></p>
+              <div class="form-row">
+                <label>Nueva contraseña (opcional) <input name="newPassword" minlength="4" placeholder="Déjela vacía para no cambiarla"></label>
+              </div>
+            </div>
+          </fieldset>
+          <p class="form-error" role="alert" hidden></p>
+          <div class="row-actions">
+            <button class="btn" id="cg-submit">Registrar cuidador</button>
+            <button type="button" class="btn ghost" id="btn-cancel-cg">Cancelar</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <!-- ============ USUARIOS ============ -->
+    <section id="tab-users" class="view">
+      <h1>👥 Usuarios</h1>
+      <p class="muted">Cuentas guardadas en <code>data/users.txt</code>.</p>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Registrado por</th><th>Acciones</th></tr></thead>
+          <tbody id="users-body"></tbody>
+        </table>
+      </div>
+      <article class="card">
+        <h2>Crear usuario</h2>
+        <form id="form-user" class="form">
+          <div class="form-row">
+            <label>Nombre <input name="name" required></label>
+            <label>Usuario <input name="username" required pattern="[A-Za-z0-9_.\-]{3,30}" title="3 a 30 caracteres: letras, números, punto, guion o guion bajo"></label>
+            <label>Contraseña <input name="password" required minlength="4"></label>
+            <label>Rol
+              <select name="role">
+                <option value="usuario">Adulto mayor (usuario)</option>
+                <option value="cliente">Familiar responsable (cliente)</option>
+                <option value="cuidador">Cuidador/a</option>
+                <option value="admin">Administrador</option>
+              </select>
+            </label>
+          </div>
+          <button class="btn">Crear usuario</button>
+        </form>
+      </article>
+    </section>
+  </main>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script src="js/availability.js"></script>
+  <script src="js/admin.js"></script>
+</body>
+</html>

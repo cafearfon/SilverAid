@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SilverAid — Demo</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/auth.js"></script>
+  <script>if (!SAAuth.get()) location.replace('login.html');</script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="SilverAid, ir al inicio">
+      <img class="logo logo-color" src="assets/brand/silveraid-horizontal-color.svg" alt="SilverAid" width="187" height="48">
+      <img class="logo logo-negativo" src="assets/brand/silveraid-horizontal-negativo.svg" alt="SilverAid" width="187" height="48">
+    </a>
+    <div class="a11y">
+      <button id="btn-big" class="chip" aria-pressed="false">A+ Texto grande</button>
+      <button id="btn-contrast" class="chip" aria-pressed="false">◐ Alto contraste</button>
+      <button id="btn-reset" class="chip" title="Restaurar los datos de ejemplo">↺ Reiniciar demo</button>
+      <a class="chip" id="admin-link" href="admin.html" hidden>🔐 Administración</a>
+      <span class="chip user-chip" id="user-chip"></span>
+      <button id="btn-logout" class="chip">Salir ⎋</button>
+    </div>
+  </header>
+
+  <nav class="tabs" id="tabs" aria-label="Secciones">
+    <button data-view="home" class="active">🏠 Inicio</button>
+    <button data-view="meds">💊 Medicamentos</button>
+    <button data-view="family">👨‍👩‍👧 Familia</button>
+    <button data-view="sos">🆘 Emergencia</button>
+    <button data-view="assistant">💬 Asistente</button>
+    <button data-view="caregivers">🧑‍⚕️ Cuidadores</button>
+  </nav>
+
+  <main>
+    <!-- ============ INICIO ============ -->
+    <section id="view-home" class="view active">
+      <div class="hero">
+        <div>
+          <h1 id="greeting">Hola</h1>
+          <p id="today-date"></p>
+        </div>
+        <img class="hero-symbol" src="assets/brand/silveraid-simbolo-color.svg" alt="" width="112" height="112">
+      </div>
+      <div class="grid">
+        <article class="card"><h2>💊 Próxima dosis</h2><div id="home-next-dose"></div></article>
+        <article class="card"><h2>📅 Próxima cita</h2><div id="home-next-appt"></div></article>
+        <article class="card sos-card">
+          <h2>🆘 ¿Necesita ayuda?</h2>
+          <p>Avisa a su familia con su ubicación.</p>
+          <button class="btn danger big" data-action="sos">Pedir ayuda</button>
+        </article>
+        <article class="card"><h2>🧑‍⚕️ Cuidadores</h2><div id="home-requests"></div></article>
+      </div>
+      <article class="card">
+        <h2>🔔 Avisos recientes a la familia</h2>
+        <ul id="home-alerts" class="feed"></ul>
+      </article>
+    </section>
+
+    <!-- ============ 1. MEDICAMENTOS ============ -->
+    <section id="view-meds" class="view">
+      <h1>💊 Medicamentos de hoy</h1>
+      <p class="muted">Confirme cada toma. Si una dosis pasa 30 minutos sin confirmarse, se avisa automáticamente a la familia.</p>
+      <div class="row-actions">
+        <button class="btn ghost" id="btn-notify">🔔 Activar notificaciones</button>
+        <button class="btn ghost" id="btn-sim-missed">⚠️ Simular dosis olvidada</button>
+      </div>
+      <ul id="dose-list" class="dose-list"></ul>
+      <div class="grid two">
+        <article class="card">
+          <h2>Mis medicamentos</h2>
+          <ul id="med-list" class="list"></ul>
+        </article>
+        <article class="card">
+          <h2>Añadir medicamento</h2>
+          <form id="form-med" class="form">
+            <label>Nombre <input name="name" required placeholder="Ej. Paracetamol"></label>
+            <label>Dosis <input name="dose" placeholder="Ej. 1 comprimido"></label>
+            <label>Horas (separadas por comas) <input name="times" required placeholder="08:00, 20:00"></label>
+            <button class="btn">Añadir</button>
+          </form>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ 2. PANEL FAMILIA / CUIDADORES ============ -->
+    <section id="view-family" class="view">
+      <h1>👨‍👩‍👧 Panel de la familia</h1>
+      <p class="muted">Coordinación entre cuidadores: avisos, citas, tareas y turnos de visita.</p>
+
+      <!-- Solo para clientes (familiar responsable) -->
+      <article class="card" id="elders-card" hidden>
+        <h2>👵 Registrar a mi familiar mayor</h2>
+        <p class="muted">Cree la cuenta de su familiar. El administrador de SilverAid la revisará y le dará de alta; hasta entonces no podrá iniciar sesión.</p>
+        <ul id="elder-list" class="list"></ul>
+        <form id="form-elder" class="form compact">
+          <div class="form-row">
+            <label>Nombre completo <input name="name" required></label>
+            <label>Usuario <input name="username" required pattern="[A-Za-z0-9_.\-]{3,30}" title="3 a 30 caracteres: letras, números, punto, guion o guion bajo"></label>
+            <label>Contraseña <input name="password" required minlength="4"></label>
+          </div>
+          <button class="btn">Enviar para alta</button>
+        </form>
+      </article>
+
+      <article class="card">
+        <div class="card-head">
+          <h2>🔔 Avisos</h2>
+          <button class="btn ghost small" id="btn-clear-alerts">Limpiar</button>
+        </div>
+        <ul id="family-alerts" class="feed"></ul>
+      </article>
+
+      <div class="grid two">
+        <article class="card">
+          <h2>📅 Citas médicas</h2>
+          <ul id="appt-list" class="list"></ul>
+          <form id="form-appt" class="form compact">
+            <label>Motivo <input name="title" required placeholder="Ej. Análisis de sangre"></label>
+            <div class="form-row">
+              <label>Fecha <input type="date" name="date" required></label>
+              <label>Hora <input type="time" name="time" required value="10:00"></label>
+            </div>
+            <label>Lugar <input name="place" placeholder="Ej. Centro de Salud"></label>
+            <label>Acompaña <select name="who" class="contact-select"></select></label>
+            <button class="btn">Añadir cita</button>
+          </form>
+        </article>
+
+        <article class="card">
+          <h2>✅ Tareas</h2>
+          <ul id="task-list" class="list"></ul>
+          <form id="form-task" class="form compact">
+            <label>Tarea <input name="title" required placeholder="Ej. Comprar pañuelos"></label>
+            <label>Responsable <select name="who" class="contact-select"></select></label>
+            <button class="btn">Añadir tarea</button>
+          </form>
+        </article>
+      </div>
+
+      <article class="card">
+        <h2>🗓️ Turnos de visita de la semana</h2>
+        <p class="muted">Pulse una casilla para asignar o cambiar a la persona.</p>
+        <div class="table-wrap"><table id="visit-grid" class="visit-grid"></table></div>
+      </article>
+
+      <article class="card">
+        <h2>📇 Contactos de la familia</h2>
+        <ul id="contact-list" class="list"></ul>
+        <form id="form-contact" class="form compact">
+          <div class="form-row">
+            <label>Nombre <input name="name" required></label>
+            <label>Relación <input name="relation" placeholder="Ej. Sobrina"></label>
+            <label>Teléfono <input name="phone" type="tel"></label>
+          </div>
+          <button class="btn">Añadir contacto</button>
+        </form>
+      </article>
+    </section>
+
+    <!-- ============ 3. EMERGENCIA / CAÍDAS ============ -->
+    <section id="view-sos" class="view">
+      <h1>🆘 Emergencia</h1>
+      <p>Pulse el botón para avisar a sus contactos con su ubicación. Tendrá 5 segundos para cancelar.</p>
+      <div class="sos-wrap">
+        <button class="btn-sos" data-action="sos" aria-label="Pedir ayuda de emergencia">AYUDA</button>
+      </div>
+      <div class="grid two">
+        <article class="card">
+          <h2>📉 Detección de caídas</h2>
+          <label class="switch"><input type="checkbox" id="fall-toggle"> Activar detección con el sensor del teléfono</label>
+          <p class="muted" id="fall-status">Desactivada.</p>
+          <button class="btn ghost" id="btn-sim-fall">Simular una caída</button>
+        </article>
+        <article class="card">
+          <h2>📞 Se avisará a</h2>
+          <ul id="sos-contacts" class="list"></ul>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ 4. ASISTENTE ============ -->
+    <section id="view-assistant" class="view">
+      <h1>💬 Asistente</h1>
+      <p class="muted">Pregunte con texto o con la voz. Pruebe con:</p>
+      <div class="chips" id="suggestions">
+        <button class="chip" data-say="¿Qué hora es?">¿Qué hora es?</button>
+        <button class="chip" data-say="¿Qué medicamentos me quedan hoy?">Mis medicamentos</button>
+        <button class="chip" data-say="¿Cuándo es mi próxima cita?">Próxima cita</button>
+        <button class="chip" data-say="Dame una receta fácil">Una receta</button>
+        <button class="chip" data-say="Quiero llamar a mi familia">Llamar a la familia</button>
+        <button class="chip" data-say="Cuéntame un chiste">Un chiste</button>
+        <button class="chip" data-say="Lee: Recuerde beber agua durante el día.">Leer un texto</button>
+      </div>
+      <div id="chat" class="chat" aria-live="polite"></div>
+      <form id="form-chat" class="chat-form">
+        <button type="button" id="btn-mic" class="btn ghost" title="Hablar" aria-label="Hablar">🎤</button>
+        <input id="chat-input" placeholder="Escriba su pregunta…" autocomplete="off" aria-label="Pregunta">
+        <button class="btn">Enviar</button>
+      </form>
+      <label class="switch"><input type="checkbox" id="tts-toggle" checked> Leer las respuestas en voz alta</label>
+    </section>
+
+    <!-- ============ 5. CUIDADORES ============ -->
+    <section id="view-caregivers" class="view">
+      <h1>🧑‍⚕️ Red de cuidadores</h1>
+      <div class="grid two">
+        <article class="card">
+          <h2>Pedir ayuda</h2>
+          <form id="form-request" class="form">
+            <label>¿Qué necesita?
+              <select name="type">
+                <option value="compania">Compañía o paseo</option>
+                <option value="compras">Hacer la compra</option>
+                <option value="tecnologia">Ayuda con el móvil u ordenador</option>
+                <option value="tramites">Trámites y papeles</option>
+              </select>
+            </label>
+            <div class="form-row">
+              <label>Fecha <input type="date" name="date" required></label>
+              <label>Hora <input type="time" name="time" required value="10:00"></label>
+            </div>
+            <label>Notas <textarea name="notes" rows="2" placeholder="Ej. Necesito pan y fruta"></textarea></label>
+            <button class="btn">Buscar cuidador</button>
+          </form>
+        </article>
+        <article class="card">
+          <h2>Mis solicitudes</h2>
+          <ul id="request-list" class="list"></ul>
+        </article>
+      </div>
+      <h2>Cuidadores cerca de usted</h2>
+      <div id="caregiver-list" class="cg-grid"></div>
+    </section>
+  </main>
+
+  <!-- Ventana de cuenta atrás (SOS / caída) -->
+  <div id="overlay" class="overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="ov-title">
+    <div class="overlay-box">
+      <h2 id="ov-title"></h2>
+      <p id="ov-text"></p>
+      <div id="ov-count" class="ov-count"></div>
+      <div id="ov-actions" class="ov-actions"></div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/meds.js"></script>
+  <script src="js/family.js"></script>
+  <script src="js/sos.js"></script>
+  <script src="js/assistant.js"></script>
+  <script src="js/availability.js"></script>
+  <script src="js/caregivers.js"></script>
+  <script src="js/elders.js"></script>
+  <script src="js/main.js"></script>
+</body>
+</html>

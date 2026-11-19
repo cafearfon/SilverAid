@@ -1,7 +1,10 @@
 /* SilverAid — estado compartido, utilidades y datos de ejemplo. */
 (function () {
   const SA = (window.SA = {});
-  const KEY = 'silveraid-demo-v1';
+  // Cada usuario tiene sus propios datos en el navegador.
+  SA.session = (window.SAAuth && SAAuth.get()) || { username: 'invitado', name: 'Carmen', role: 'usuario' };
+  const KEY = 'silveraid-demo-v2:' + SA.session.username.toLowerCase();
+  SA.isAdmin = () => SA.session.role === 'admin';
 
   // ---------- Utilidades ----------
   SA.uid = () => Math.random().toString(36).slice(2, 10);
@@ -23,13 +26,7 @@
   SA.normalize = (s) => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 
   // ---------- Datos de ejemplo ----------
-  SA.VOLUNTEERS = [
-    { id: 'v1', name: 'Lucía Martín', age: 24, skills: ['compania', 'tecnologia'], km: 0.8, rating: 4.9, bio: 'Estudiante de Enfermería. Le encanta pasear y charlar.' },
-    { id: 'v2', name: 'Andrés Gil', age: 31, skills: ['compras', 'tramites'], km: 1.2, rating: 4.7, bio: 'Tiene coche y horario flexible por las mañanas.' },
-    { id: 'v3', name: 'Sara López', age: 19, skills: ['tecnologia', 'compania'], km: 2.1, rating: 4.8, bio: 'Ayuda con WhatsApp, videollamadas y el banco online.' },
-    { id: 'v4', name: 'Pedro Sánchez', age: 67, skills: ['compania', 'tramites'], km: 0.5, rating: 5.0, bio: 'Jubilado, exfuncionario. Conoce bien los trámites.' },
-    { id: 'v5', name: 'Nerea Ortiz', age: 27, skills: ['compras', 'compania'], km: 1.7, rating: 4.6, bio: 'Vive en el barrio. Puede hacer la compra semanal.' },
-  ];
+  SA.CAREGIVERS = []; // se cargan del servidor (data/caregivers.txt) en caregivers.js
   SA.SKILLS = { compania: 'Compañía', compras: 'Compras', tecnologia: 'Tecnología', tramites: 'Trámites' };
 
   function seed() {
@@ -43,7 +40,7 @@
     const day = {};
     meds.forEach((m) => m.times.forEach((t) => { if (SA.toMin(t) < now - 30) day[m.id + '@' + t] = 'taken'; }));
     return {
-      user: { name: 'Carmen' },
+      user: { name: SA.session.name },
       settings: { big: false, contrast: false },
       contacts: [
         { id: SA.uid(), name: 'Laura', relation: 'Hija', phone: '+34 600 111 222' },
@@ -75,6 +72,7 @@
       if (s && Array.isArray(s.meds)) {
         // Solicitudes que quedaron "buscando" al recargar → confirmadas.
         s.requests.forEach((r) => { if (r.status === 'buscando') r.status = 'confirmada'; });
+        s.user.name = SA.session.name;
         return s;
       }
     } catch (e) { /* datos corruptos o almacenamiento bloqueado */ }

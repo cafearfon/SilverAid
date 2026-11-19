@@ -57,13 +57,20 @@
   async function sendSOS(reason) {
     showOverlay({ title: 'Enviando aviso…', text: 'Obteniendo su ubicación.', actions: [] });
     const loc = await getLocation();
+    // Registra la llamada en la central de SilverAid (data/sos.txt), visible para el administrador.
+    let central = true;
+    try {
+      await SAAuth.api('/api/sos', { method: 'POST', body: { reason, lat: loc?.lat, lng: loc?.lng } });
+    } catch (err) {
+      central = false;
+    }
     const names = SA.state.contacts.map((c) => c.name).join(', ') || 'ningún contacto (añada uno en Familia)';
     const link = loc ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}` : null;
     SA.alertFamily('sos', `🆘 ${SA.state.user.name} necesita ayuda (${reason}). ${loc ? 'Ubicación adjunta.' : 'Ubicación no disponible.'}`, link);
     SA.beep(3, 990);
     showOverlay({
       title: '✅ Aviso enviado',
-      text: `Se ha avisado a: ${names}. Mantenga la calma, la ayuda está en camino.`,
+      text: `${central ? 'Se ha avisado a la central de SilverAid' : 'No se pudo contactar con la central de SilverAid'} y a: ${names}. ${central ? 'Mantenga la calma, la ayuda está en camino.' : 'Si es grave, llame al 112.'}`,
       actions: [['Cerrar', 'ghost', closeOverlay]],
     });
   }

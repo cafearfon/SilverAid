@@ -63,8 +63,8 @@
       return { text: 'Estos son sus contactos:\n' + s.contacts.map((c) => `• ${c.name} (${c.relation}): ${c.phone}`).join('\n') };
     }
 
-    if (/(voluntari|compania|compra|acompan|sola|solo|aburr)/.test(q))
-      return { text: 'Puedo buscarle un voluntario del barrio para hacerle compañía, ayudarle con la compra, con el móvil o con trámites.', actions: [['🤝 Pedir un voluntario', 'view:volunteers']] };
+    if (/(cuidador|cuidadora|compania|compra|acompan|sola|solo|aburr)/.test(q))
+      return { text: 'Puedo buscarle un cuidador cerca de usted para hacerle compañía, ayudarle con la compra, con el móvil o con trámites.', actions: [['🧑‍⚕️ Pedir un cuidador', 'view:caregivers']] };
 
     if (/(gracias)/.test(q)) return { text: '¡De nada! Estoy aquí para lo que necesite. 😊' };
 
@@ -72,7 +72,7 @@
       return { text: 'En este demo no tengo conexión con el servicio del tiempo. En la versión completa podré decirle si va a llover. ☂️' };
 
     return {
-      text: 'Perdone, no le he entendido bien. Puedo ayudarle con:\n• La hora y la fecha\n• Sus medicamentos y citas\n• Recetas fáciles y chistes\n• Llamar a su familia o pedir un voluntario\n• Leer un texto en voz alta (escriba «Lee: …»)\n• Pedir ayuda urgente',
+      text: 'Perdone, no le he entendido bien. Puedo ayudarle con:\n• La hora y la fecha\n• Sus medicamentos y citas\n• Recetas fáciles y chistes\n• Llamar a su familia o pedir un cuidador\n• Leer un texto en voz alta (escriba «Lee: …»)\n• Pedir ayuda urgente',
     };
   }
 
