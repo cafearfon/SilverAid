@@ -37,13 +37,16 @@
     <section class="card login-card" id="panel-register" hidden>
       <h1>Crear cuenta</h1>
       <form id="form-register" class="form" novalidate>
-        <label>Su nombre <input name="name" autocomplete="name" required placeholder="Ej. Carmen"></label>
         <fieldset class="role-pick">
           <legend>Soy…</legend>
-          <label><input type="radio" name="role" value="usuario" checked> <span><strong>👵 Adulto mayor</strong><small>Uso SilverAid para mi día a día</small></span></label>
-          <label><input type="radio" name="role" value="cliente"> <span><strong>👨‍👩‍👧 Familiar responsable</strong><small>Cuido de un familiar mayor</small></span></label>
+          <label><input type="radio" name="role" value="cliente" checked> <span><strong>👨‍👩‍👧 Familiar responsable</strong><small>Cuido de un familiar mayor</small></span></label>
           <label><input type="radio" name="role" value="cuidador"> <span><strong>🧑‍⚕️ Cuidador/a</strong><small>Ofrezco cuidados y acompañamiento</small></span></label>
         </fieldset>
+        <p class="small-text muted">¿Es usted un adulto mayor? Su familiar responsable crea su cuenta desde SilverAid.</p>
+        <label>Nombre y apellidos <input name="name" autocomplete="name" required maxlength="80" placeholder="Ej. Laura Gómez Ruiz"></label>
+        <label>Dirección <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
+        <label>Celular <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
+        <label>Correo electrónico <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. laura@correo.com"></label>
         <label>Usuario <input name="username" autocomplete="username" required placeholder="Letras y números, sin espacios"></label>
         <label>Contraseña
           <span class="pw-field">
@@ -68,8 +71,10 @@
 
       function show(name) {
         Object.entries(panels).forEach(([k, el]) => { el.hidden = k !== name; });
-        panels[name].querySelector('input').focus();
+        panels[name].querySelector('input:not([type="radio"])').focus();
       }
+
+      const reg = document.getElementById('form-register');
       function showError(form, msg) {
         const p = form.querySelector('.form-error');
         p.textContent = msg;
@@ -105,9 +110,17 @@
       document.getElementById('form-register').addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = e.target;
+        const role = f.elements.role.value;
+        if (!f.elements.name.value.trim()) return showError(f, 'Escriba su nombre y apellidos.');
+        if (!f.address.value.trim()) return showError(f, 'Escriba su dirección.');
+        if (!/^[0-9+()\-\s]{7,20}$/.test(f.mobile.value.trim())) return showError(f, 'Escriba un número de celular válido.');
+        if (!/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(f.email.value.trim())) return showError(f, 'Escriba un correo electrónico válido.');
         if (f.password.value !== f.password2.value) return showError(f, 'Las contraseñas no coinciden.');
         showError(f, '');
-        const body = { name: f.elements.name.value.trim(), username: f.username.value.trim(), password: f.password.value, role: f.elements.role.value };
+        const body = {
+          name: f.elements.name.value.trim(), address: f.address.value.trim(), mobile: f.mobile.value.trim(),
+          email: f.email.value.trim(), username: f.username.value.trim(), password: f.password.value, role,
+        };
         try {
           await SAAuth.api('/api/register', { method: 'POST', body });
           enter(await SAAuth.api('/api/login', { method: 'POST', body }));
@@ -116,11 +129,11 @@
         }
       });
 
-      // login.html#registro abre «Crear cuenta»; #registro-cliente (o -usuario, -cuidador) además elige el rol.
-      const m = location.hash.match(/^#registro(?:-(usuario|cliente|cuidador))?$/);
+      // login.html#registro abre «Crear cuenta»; #registro-cliente o #registro-cuidador además elige el rol.
+      const m = location.hash.match(/^#registro(?:-(cliente|cuidador))?$/);
       if (m) {
         show('register');
-        if (m[1]) document.querySelector(`#form-register input[name="role"][value="${m[1]}"]`).checked = true;
+        if (m[1]) reg.querySelector(`input[name="role"][value="${m[1]}"]`).checked = true;
       }
 
       // Si ya hay una sesión válida, entra directamente.

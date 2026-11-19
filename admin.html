@@ -33,15 +33,28 @@
   </header>
 
   <nav class="tabs" id="tabs" aria-label="Secciones de administración">
-    <button data-tab="sos" class="active">🚨 Llamadas SOS <span class="count" id="count-sos" hidden></span></button>
-    <button data-tab="pending">⏳ Altas pendientes <span class="count" id="count-pending" hidden></span></button>
+    <button data-tab="users" class="active">👥 Usuarios</button>
+    <button data-tab="clients">👨‍👩‍👧 Clientes</button>
     <button data-tab="caregivers">🧑‍⚕️ Cuidadores</button>
-    <button data-tab="users">👥 Usuarios</button>
+    <button data-tab="pending">⏳ Altas pendientes <span class="count" id="count-pending" hidden></span></button>
+    <button data-tab="sos">🚨 Llamadas SOS <span class="count" id="count-sos" hidden></span></button>
   </nav>
 
   <main>
-    <!-- ============ 3. LLAMADAS DEL BOTÓN DE PÁNICO ============ -->
-    <section id="tab-sos" class="view active">
+    <!-- ============ CLIENTES (familiares responsables) ============ -->
+    <section id="tab-clients" class="view">
+      <h1>👨‍👩‍👧 Clientes</h1>
+      <p class="muted">Familiares responsables y los adultos mayores que han registrado.</p>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Cliente</th><th>Contacto</th><th>Estado</th><th>Fecha de registro</th><th>Familiares registrados</th><th>Acciones</th></tr></thead>
+          <tbody id="clients-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ============ LLAMADAS DEL BOTÓN DE PÁNICO ============ -->
+    <section id="tab-sos" class="view">
       <div class="card-head">
         <h1>🚨 Llamadas del botón de pánico</h1>
         <span class="muted live" id="sos-updated"></span>
@@ -60,7 +73,7 @@
       </div>
     </section>
 
-    <!-- ============ 1. ALTAS PENDIENTES ============ -->
+    <!-- ============ ALTAS PENDIENTES ============ -->
     <section id="tab-pending" class="view">
       <h1>⏳ Altas pendientes</h1>
       <p class="muted">Adultos mayores registrados por un familiar responsable (cliente). No pueden iniciar sesión hasta que les dé de alta.</p>
@@ -162,30 +175,69 @@
     <!-- ============ USUARIOS ============ -->
     <section id="tab-users" class="view">
       <h1>👥 Usuarios</h1>
-      <p class="muted">Cuentas guardadas en <code>data/users.txt</code>.</p>
+      <p class="muted">Adultos mayores que usan SilverAid. Fichas guardadas en <code>data/users.txt</code>.</p>
+      <div class="chips" id="users-filter" role="group" aria-label="Filtrar usuarios">
+        <button class="chip" data-filter="" aria-pressed="true">Todos</button>
+        <button class="chip" data-filter="activo" aria-pressed="false">Activos</button>
+        <button class="chip" data-filter="inactivo" aria-pressed="false">Inactivos</button>
+        <button class="chip" data-filter="pendiente" aria-pressed="false">Pendientes de alta</button>
+      </div>
       <div class="table-wrap card flush">
         <table class="data">
-          <thead><tr><th>Nombre</th><th>Usuario</th><th>Rol</th><th>Estado</th><th>Registrado por</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>Nombre</th><th>Contacto</th><th>Dirección</th><th>Sangre</th><th>Cliente asociado</th><th>Estado</th><th>Acciones</th></tr></thead>
           <tbody id="users-body"></tbody>
         </table>
       </div>
-      <article class="card">
-        <h2>Crear usuario</h2>
+
+      <button class="btn" id="btn-toggle-user" aria-expanded="false" aria-controls="user-form-card">➕ Crear usuario</button>
+
+      <article class="card cg-form-card" id="user-form-card" hidden>
+        <h2 id="user-form-title">Crear usuario</h2>
         <form id="form-user" class="form">
-          <div class="form-row">
-            <label>Nombre <input name="name" required></label>
-            <label>Usuario <input name="username" required pattern="[A-Za-z0-9_.\-]{3,30}" title="3 a 30 caracteres: letras, números, punto, guion o guion bajo"></label>
-            <label>Contraseña <input name="password" required minlength="4"></label>
-            <label>Rol
-              <select name="role">
-                <option value="usuario">Adulto mayor (usuario)</option>
-                <option value="cliente">Familiar responsable (cliente)</option>
-                <option value="cuidador">Cuidador/a</option>
-                <option value="admin">Administrador</option>
-              </select>
-            </label>
+          <fieldset class="form-section">
+            <legend>Datos personales</legend>
+            <div class="form-row">
+              <label>Nombre completo * <input name="name" required maxlength="80"></label>
+              <label>Dirección * <input name="address" required maxlength="120"></label>
+            </div>
+            <div class="form-row">
+              <label>Teléfono * <input name="phone" type="tel" required pattern="[0-9+()\-\s]{7,20}" title="7 a 20 dígitos"></label>
+              <label>Celular * <input name="mobile" type="tel" required pattern="[0-9+()\-\s]{7,20}" title="7 a 20 dígitos"></label>
+              <label>Correo electrónico (opcional) <input name="email" type="email" maxlength="80"></label>
+            </div>
+            <div class="form-row">
+              <label>Tipo de sangre *
+                <select name="bloodType" required>
+                  <option value="">Seleccione…</option>
+                  <option>O+</option><option>O-</option><option>A+</option><option>A-</option>
+                  <option>B+</option><option>B-</option><option>AB+</option><option>AB-</option>
+                </select>
+              </label>
+              <label>Cliente asociado *
+                <select name="client" id="user-client" required></select>
+              </label>
+            </div>
+            <p class="small-text muted" id="no-clients" hidden>⚠️ No hay clientes registrados. El cliente (familiar responsable) debe crearse antes que el usuario.</p>
+          </fieldset>
+
+          <fieldset class="form-section">
+            <legend>Acceso a SilverAid</legend>
+            <div class="form-row" id="user-new-access">
+              <label>Usuario * <input name="username" pattern="[A-Za-z0-9_.\-]{3,30}" title="3 a 30 caracteres: letras, números, punto, guion o guion bajo"></label>
+              <label>Contraseña * <input name="password" minlength="4"></label>
+            </div>
+            <div id="user-edit-access" hidden>
+              <p class="small-text">Cuenta de acceso: <strong id="user-edit-username"></strong></p>
+              <div class="form-row">
+                <label>Nueva contraseña (opcional) <input name="newPassword" minlength="4" placeholder="Déjela vacía para no cambiarla"></label>
+              </div>
+            </div>
+          </fieldset>
+          <p class="form-error" role="alert" hidden></p>
+          <div class="row-actions">
+            <button class="btn" id="user-submit">Crear usuario</button>
+            <button type="button" class="btn ghost" id="btn-cancel-user">Cancelar</button>
           </div>
-          <button class="btn">Crear usuario</button>
         </form>
       </article>
     </section>

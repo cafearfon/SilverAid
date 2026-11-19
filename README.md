@@ -32,7 +32,7 @@ Usuario administrador por defecto: **admin / admin**.
 | Página | Para qué |
 |--------|----------|
 | `index.html` | Landing page pública: presentación, funciones, roles, cómo funciona y seguridad. Funciona también en GitHub Pages. |
-| `login.html` | Inicio de sesión y registro (`login.html#registro`, `#registro-cliente`, `#registro-usuario`, `#registro-cuidador` abren el registro con el rol elegido). |
+| `login.html` | Inicio de sesión y registro (`login.html#registro`, `#registro-cliente`, `#registro-cuidador` abren el registro con el rol elegido). |
 | `app.html` | La aplicación (requiere sesión). |
 | `admin.html` | Administración (solo admin). |
 
@@ -49,7 +49,7 @@ Usuario administrador por defecto: **admin / admin**.
   | `cuidador` | Cuidador/a |
   | `admin` | Administrador |
 
-- Cualquiera puede crear su cuenta desde «Crear una cuenta» eligiendo *usuario*, *cliente* o *cuidador* (nunca *admin*).
+- Desde «Crear una cuenta» solo se registran **familiares responsables** (*cliente*: nombre y apellidos, dirección, celular, correo electrónico, usuario y contraseña) y **cuidadores** (*cuidador*: nombre y apellidos, dirección, celular, correo electrónico, usuario y contraseña). Los **adultos mayores** (*usuario*) los registra su familiar desde la aplicación (quedan pendientes de alta) o el administrador. Nunca se crean *admin* desde el registro.
 - Estados de cuenta: `activo`, `pendiente` (esperando alta) e `inactivo`.
 
 ## Página de administración (`admin.html`)
@@ -58,16 +58,17 @@ Solo para el rol `admin` (al iniciar sesión como admin se abre directamente):
 
 | Pestaña | Qué permite |
 |---------|-------------|
-| 🚨 **Llamadas SOS** | Registro de cada pulsación del botón de pánico (y de caídas sin respuesta): fecha, persona, motivo y ubicación. Se actualiza cada 10 s, suena un aviso con cada llamada nueva y se marcan como atendidas con una nota. |
-| ⏳ **Altas pendientes** | Adultos mayores que un cliente (familiar) registró desde la sección *Familia*. No pueden entrar hasta que el admin les da de alta (o rechaza la solicitud). |
+| 👥 **Usuarios** | Adultos mayores (rol `usuario`), con filtro por estado y acciones **✏️ Editar**, **Inactivar**/Activar y Eliminar. El botón **➕ Crear usuario** despliega el formulario: nombre completo, dirección, teléfono, celular, correo (opcional), tipo de sangre, **cliente asociado** (debe existir antes) y usuario/contraseña de acceso. Es la pestaña que se abre por defecto. |
+| 👨‍👩‍👧 **Clientes** | Familiares responsables con los adultos mayores que han registrado y su estado; permite dar de alta a esos familiares y activar/desactivar al cliente. |
 | 🧑‍⚕️ **Cuidadores** | Lista de cuidadores registrados con botones **✏️ Editar** (abre el formulario con sus datos; si tiene cuenta se puede cambiar la contraseña, si no, crearla) y **Eliminar**. Debajo, el botón **➕ Registrar cuidador** que despliega el formulario: información personal, perfil, cuenta opcional (rol `cuidador`) y **disponibilidad semanal** en una matriz (días en columnas, una hora por fila de 06:00 a 22:00; clic o arrastre para marcar). La aplicación solo asigna un cuidador si está disponible ese día y hora. |
-| 👥 **Usuarios** | Todas las cuentas: crear, activar/desactivar y eliminar. |
+| ⏳ **Altas pendientes** | Adultos mayores que un cliente (familiar) registró desde la sección *Familia*. No pueden entrar hasta que el admin les da de alta (o rechaza la solicitud). |
+| 🚨 **Llamadas SOS** | Registro de cada pulsación del botón de pánico (y de caídas sin respuesta): fecha, persona, motivo y ubicación. Se actualiza cada 10 s, suena un aviso con cada llamada nueva (en cualquier pestaña) y se marcan como atendidas con una nota. |
 
 Archivos de datos (en `data/`, fuera de git):
 
 | Archivo | Campos |
 |---------|--------|
-| `users.txt` | `usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro` |
+| `users.txt` | `usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;direccion;telefono;celular;email;tipo_sangre;cliente` (los seis últimos, ficha del adulto mayor) |
 | `caregivers.txt` | `id;nombre;documento;fecha_nacimiento;telefono;email;direccion;zona;titulo;experiencia;habilidades;disponibilidad;usuario;fecha_registro` — disponibilidad como `lun=8,9,10\|mar=14,15` (horas de inicio de cada franja de 1 h) |
 | `sos.txt` | `id;fecha;usuario;nombre;motivo;lat;lng;estado;atendido_por;fecha_atencion;nota` |
 - Cada usuario tiene sus propios datos de demo (medicamentos, citas, etc.) en el navegador.

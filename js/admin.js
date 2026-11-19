@@ -76,7 +76,7 @@
 
   // ---------------------------------------------------------------- pestañas
   function showTab(name) {
-    if (!$('tab-' + name)) name = 'sos';
+    if (!$('tab-' + name)) name = 'users';
     document.querySelectorAll('main > .view').forEach((v) => v.classList.toggle('active', v.id === 'tab-' + name));
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.tab === name));
     history.replaceState(null, '', '#' + name);
@@ -134,6 +134,31 @@
     } catch (err) { return handleError(err); }
     renderPending();
     renderUsers();
+    renderClients();
+  }
+
+  /** Clientes (familiares responsables) con los adultos mayores que han registrado. */
+  function renderClients() {
+    const clients = users.filter((u) => u.role === 'cliente');
+    $('clients-body').innerHTML = clients.length
+      ? clients.map((c) => {
+          const elders = users.filter((u) => u.role === 'usuario' && (u.client || '').toLowerCase() === c.username.toLowerCase());
+          return `
+        <tr>
+          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span></td>
+          <td>${c.mobile ? `📱 ${esc(c.mobile)}` : '<span class="muted">Sin celular</span>'}${c.email ? `<span class="sub">${esc(c.email)}</span>` : ''}${c.address ? `<span class="sub">${esc(c.address)}</span>` : ''}</td>
+          <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span></td>
+          <td>${fmt(c.registeredAt)}</td>
+          <td>${elders.length
+            ? elders.map((e) => `<div class="elder-line">${esc(e.name)} <span class="pill ${e.status}">${STATUS[e.status] || esc(e.status)}</span>
+                ${e.status === 'pendiente' ? `<button class="btn ok small" data-status="activo" data-user="${esc(e.username)}">Dar de alta</button>` : ''}</div>`).join('')
+            : '<span class="muted">Ninguno</span>'}</td>
+          <td class="actions">${c.status === 'activo'
+            ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(c.username)}">Inactivar</button>`
+            : `<button class="btn ok small" data-status="activo" data-user="${esc(c.username)}">Activar</button>`}</td>
+        </tr>`;
+        }).join('')
+      : '<tr><td colspan="6" class="empty">Todavía no hay clientes registrados.</td></tr>';
   }
 
   function nameOf(username) {
@@ -159,27 +184,49 @@
       : '<tr><td colspan="5" class="empty">✅ No hay altas pendientes.</td></tr>';
   }
 
+  // ---- Usuarios (adultos mayores)
+  let usersFilter = '';
+  let editingUser = null; // nombre de usuario que se está editando (null = alta nueva)
+
   function renderUsers() {
-    $('users-body').innerHTML = users.map((u) => `
-      <tr>
-        <td><strong>${esc(u.name)}</strong> ${isSelf(u.username) ? '<span class="tag">Usted</span>' : ''}</td>
-        <td>@${esc(u.username)}</td>
-        <td>${esc(ROLE[u.role] || u.role)}</td>
+    const elders = users.filter((u) => u.role === 'usuario' && (!usersFilter || u.status === usersFilter));
+    $('users-body').innerHTML = elders.length
+      ? elders.map((u) => `
+      <tr class="${u.username === editingUser ? 'row-editing' : ''}">
+        <td><strong>${esc(u.name)}</strong><span class="sub">@${esc(u.username)}</span></td>
+        <td>${u.phone ? `☎️ ${esc(u.phone)}` : ''}${u.mobile ? `<span class="sub">📱 ${esc(u.mobile)}</span>` : ''}${u.email ? `<span class="sub">${esc(u.email)}</span>` : ''}${!u.phone && !u.mobile ? '<span class="muted">Sin datos</span>' : ''}</td>
+        <td>${u.address ? esc(u.address) : '<span class="muted">—</span>'}</td>
+        <td>${u.bloodType ? `<span class="blood">${esc(u.bloodType)}</span>` : '<span class="muted">—</span>'}</td>
+        <td>${u.client ? nameOf(u.client) : '<span class="muted">Sin asignar</span>'}</td>
         <td><span class="pill ${u.status}">${STATUS[u.status] || esc(u.status)}</span></td>
-        <td>${u.registeredBy ? nameOf(u.registeredBy) : '<span class="muted">—</span>'}</td>
-        <td class="actions">${isSelf(u.username) ? '' : `
+        <td class="actions stack">
+          <button class="btn small" data-edit-user="${esc(u.username)}">✏️ Editar</button>
           ${u.status === 'activo'
-            ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(u.username)}">Desactivar</button>`
+            ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(u.username)}">Inactivar</button>`
             : `<button class="btn ok small" data-status="activo" data-user="${esc(u.username)}">${u.status === 'pendiente' ? 'Dar de alta' : 'Activar'}</button>`}
-          <button class="btn ghost small" data-delete-user="${esc(u.username)}">Eliminar</button>`}
+          <button class="btn ghost small" data-delete-user="${esc(u.username)}">Eliminar</button>
         </td>
-      </tr>`).join('');
+      </tr>`).join('')
+      : `<tr><td colspan="7" class="empty">${usersFilter ? 'No hay usuarios con ese estado.' : 'Todavía no hay usuarios registrados.'}</td></tr>`;
+    fillClientSelect();
+  }
+
+  /** Desplegable «Cliente asociado»: solo clientes ya registrados. */
+  function fillClientSelect() {
+    const sel = $('user-client');
+    const current = sel.value;
+    const clients = users.filter((u) => u.role === 'cliente');
+    sel.innerHTML = '<option value="">Seleccione…</option>' + clients
+      .map((c) => `<option value="${esc(c.username)}">${esc(c.name)} (@${esc(c.username)})${c.status !== 'activo' ? ' — ' + (STATUS[c.status] || c.status).toLowerCase() : ''}</option>`).join('');
+    sel.value = current;
+    $('no-clients').hidden = clients.length > 0;
+    $('user-submit').disabled = !clients.length;
   }
 
   async function setStatus(username, status) {
     try {
       await api(`/api/admin/users/${encodeURIComponent(username)}/status`, { method: 'POST', body: { status } });
-      toast(status === 'activo' ? `@${username} ya puede usar SilverAid.` : `@${username} desactivado.`, 'ok');
+      toast(status === 'activo' ? `@${username} ya puede usar SilverAid.` : `@${username} inactivado: ya no puede iniciar sesión.`, 'ok');
     } catch (err) { handleError(err); }
     loadUsers();
   }
@@ -234,7 +281,7 @@
       const tab = e.target.closest('button')?.dataset.tab;
       if (tab) showTab(tab);
     });
-    showTab(location.hash.slice(1) || 'sos');
+    showTab(location.hash.slice(1) || 'users');
 
     // SOS
     $('sos-filter').addEventListener('click', (e) => {
@@ -267,21 +314,100 @@
       if (b.dataset.approve) setStatus(b.dataset.approve, 'activo');
       if (b.dataset.reject && confirmed(b, '¿Rechazar? Pulse otra vez')) deleteUser(b.dataset.reject);
     });
+    $('clients-body').addEventListener('click', (e) => {
+      const b = e.target.closest('button[data-status]');
+      if (b) setStatus(b.dataset.user, b.dataset.status);
+    });
+    // Usuarios: formulario oculto hasta pulsar «Crear usuario» o «Editar»
+    const userForm = $('form-user');
+    const userError = (msg) => {
+      const p = userForm.querySelector('.form-error');
+      p.textContent = msg || '';
+      p.hidden = !msg;
+    };
+
+    function fillUserForm(u) {
+      const f = userForm.elements;
+      userForm.reset();
+      userError('');
+      editingUser = u ? u.username : null;
+      fillClientSelect();
+      $('user-form-title').textContent = u ? `Editar usuario: ${u.name}` : 'Crear usuario';
+      $('user-submit').textContent = u ? 'Guardar cambios' : 'Crear usuario';
+      // Al crear se piden usuario y contraseña; al editar solo se puede cambiar la contraseña.
+      $('user-new-access').hidden = !!u;
+      $('user-edit-access').hidden = !u;
+      f.username.required = !u;
+      f.password.required = !u;
+      $('user-edit-username').textContent = u ? '@' + u.username : '';
+      if (u) {
+        f.name.value = u.name;
+        f.address.value = u.address || '';
+        f.phone.value = u.phone || '';
+        f.mobile.value = u.mobile || '';
+        f.email.value = u.email || '';
+        f.bloodType.value = u.bloodType || '';
+        f.client.value = u.client || '';
+      }
+      document.querySelectorAll('#users-body tr').forEach((tr) => {
+        tr.classList.toggle('row-editing', !!u && !!tr.querySelector(`[data-edit-user="${CSS.escape(u.username)}"]`));
+      });
+    }
+
+    function toggleUserForm(open, u = null) {
+      const card = $('user-form-card');
+      const btn = $('btn-toggle-user');
+      if (open) fillUserForm(u);
+      else { editingUser = null; document.querySelectorAll('#users-body tr.row-editing').forEach((tr) => tr.classList.remove('row-editing')); }
+      card.hidden = !open;
+      btn.setAttribute('aria-expanded', String(open));
+      btn.textContent = open && !u ? '✕ Cerrar formulario' : '➕ Crear usuario';
+      if (open) { card.scrollIntoView({ behavior: 'smooth', block: 'start' }); userForm.elements.name.focus({ preventScroll: true }); }
+    }
+    $('btn-toggle-user').addEventListener('click', () => toggleUserForm($('user-form-card').hidden || !!editingUser));
+    $('btn-cancel-user').addEventListener('click', () => toggleUserForm(false));
+
+    $('users-filter').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-filter]');
+      if (!b) return;
+      usersFilter = b.dataset.filter;
+      document.querySelectorAll('#users-filter .chip').forEach((c) => c.setAttribute('aria-pressed', String(c === b)));
+      renderUsers();
+    });
+
     $('users-body').addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b) return;
+      if (b.dataset.editUser) {
+        const u = users.find((x) => x.username === b.dataset.editUser);
+        if (u) toggleUserForm(true, u);
+      }
       if (b.dataset.status) setStatus(b.dataset.user, b.dataset.status);
-      if (b.dataset.deleteUser && confirmed(b)) deleteUser(b.dataset.deleteUser);
+      if (b.dataset.deleteUser && confirmed(b)) {
+        if (b.dataset.deleteUser === editingUser) toggleUserForm(false);
+        deleteUser(b.dataset.deleteUser);
+      }
     });
-    $('form-user').addEventListener('submit', async (e) => {
+
+    userForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const f = e.target.elements;
+      const f = userForm.elements;
+      const editing = editingUser;
+      const body = {
+        name: f.name.value.trim(), address: f.address.value.trim(), phone: f.phone.value.trim(),
+        mobile: f.mobile.value.trim(), email: f.email.value.trim(), bloodType: f.bloodType.value, client: f.client.value,
+      };
+      if (editing) body.newPassword = f.newPassword.value;
+      else Object.assign(body, { username: f.username.value.trim(), password: f.password.value });
+      userError('');
       try {
-        await api('/api/admin/users', { method: 'POST', body: { name: f.name.value.trim(), username: f.username.value.trim(), password: f.password.value, role: f.role.value } });
-        toast(`Usuario @${f.username.value.trim()} creado.`, 'ok');
-        e.target.reset();
+        const { user } = await api('/api/admin/users' + (editing ? '/' + encodeURIComponent(editing) : ''), { method: editing ? 'PUT' : 'POST', body });
+        toast(editing ? `Datos de ${user.name} actualizados.` : `Usuario @${user.username} creado.`, 'ok');
+        toggleUserForm(false);
         loadUsers();
-      } catch (err) { handleError(err); }
+      } catch (err) {
+        if (err.status === 401 || err.status === 403) handleError(err); else userError(err.message);
+      }
     });
 
     // Cuidadores: formulario plegable bajo la lista

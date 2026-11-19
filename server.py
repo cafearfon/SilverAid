@@ -4,7 +4,8 @@
 Sirve la aplicación y una pequeña API. Todos los datos se guardan en archivos
 de texto dentro de data/, una línea por registro y campos separados por «;»:
 
-    data/users.txt       usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro
+    data/users.txt       usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;
+                         direccion;telefono;celular;email;tipo_sangre;cliente  (ficha del adulto mayor)
     data/caregivers.txt  ficha personal de cada cuidador; disponibilidad como «lun=8,9,10|mar=14,15»
                          (día = horas de inicio de cada franja de 1 h, de 06:00 a 22:00)
     data/sos.txt         registro de llamadas del botón de pánico
@@ -34,7 +35,9 @@ PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "
 PUBLIC_DIRS = ("/css/", "/js/", "/assets/")
 
 ROLES = ("usuario", "cliente", "cuidador", "admin")
-SELF_SIGNUP_ROLES = ("usuario", "cliente", "cuidador")  # el registro público nunca crea admins
+# Registro público: solo familiares responsables y cuidadores. Los adultos mayores los registra
+# su familiar (quedan pendientes de alta) o el administrador; nunca se crean admins desde aquí.
+SELF_SIGNUP_ROLES = ("cliente", "cuidador")
 LEGACY_ROLES = {"user": "usuario"}
 STATUSES = ("activo", "pendiente", "inactivo")
 SKILLS = ("compania", "compras", "tecnologia", "tramites")
@@ -127,9 +130,15 @@ class Table:
 
 USERS = Table(
     "users.txt",
-    ["usuario", "contraseña", "nombre", "rol", "estado", "registrado_por", "fecha_registro"],
+    ["usuario", "contraseña", "nombre", "rol", "estado", "registrado_por", "fecha_registro",
+     # Ficha del adulto mayor (rol usuario); vacía para el resto de roles
+     "direccion", "telefono", "celular", "email", "tipo_sangre", "cliente"],
     seed=[("admin", "admin", "Administrador", "admin", "activo", "", "")],
 )
+
+BLOOD_TYPES = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
+PHONE_RE = re.compile(r"^[0-9+()\-\s]{7,20}$")
+EMAIL_RE = re.compile(r"^[^@\s;]+@[^@\s;]+\.[^@\s;]+$")
 
 CAREGIVERS = Table(
     "caregivers.txt",
@@ -185,7 +194,41 @@ def find_user(users, username):
 
 def public_user(u):
     return {"username": u["usuario"], "name": u["nombre"], "role": u["rol"], "status": u["estado"],
-            "registeredBy": u["registrado_por"], "registeredAt": u["fecha_registro"]}
+            "registeredBy": u["registrado_por"], "registeredAt": u["fecha_registro"],
+            "address": u.get("direccion", ""), "phone": u.get("telefono", ""), "mobile": u.get("celular", ""),
+            "email": u.get("email", ""), "bloodType": u.get("tipo_sangre", ""), "client": u.get("cliente", "")}
+
+
+def validate_name(name):
+    if not name.strip():
+        return "Escriba el nombre completo."
+    if ";" in name or "\n" in name or "\r" in name:
+        return "El nombre no puede contener «;» ni saltos de línea."
+    return None
+
+
+def elder_profile(data, users):
+    """Valida la ficha de un adulto mayor. El cliente asociado debe existir previamente. Devuelve (campos, error)."""
+    address = clean(data.get("address"), 120)
+    phone = clean(data.get("phone"), 20)
+    mobile = clean(data.get("mobile"), 20)
+    email = clean(data.get("email"), 80)
+    blood = data.get("bloodType")
+    client = find_user(users, str(data.get("client") or "").strip())
+    if not address:
+        return None, "Escriba la dirección."
+    if not PHONE_RE.match(phone):
+        return None, "Escriba un teléfono válido (7 a 20 dígitos)."
+    if not PHONE_RE.match(mobile):
+        return None, "Escriba un celular válido (7 a 20 dígitos)."
+    if email and not EMAIL_RE.match(email):
+        return None, "El correo electrónico no es válido."
+    if blood not in BLOOD_TYPES:
+        return None, "Seleccione el tipo de sangre."
+    if not client or client["rol"] != "cliente":
+        return None, "Seleccione un cliente asociado ya registrado."
+    return {"direccion": address, "telefono": phone, "celular": mobile, "email": email,
+            "tipo_sangre": blood, "cliente": client["usuario"]}, None
 
 
 def public_caregiver(c):
@@ -229,8 +272,9 @@ def new_account(users, data, role, status, registered_by=""):
         return None, error
     if find_user(users, username):
         return None, "Ese usuario ya existe."
-    user = {"usuario": username, "contraseña": password, "nombre": name, "rol": role, "estado": status,
-            "registrado_por": registered_by, "fecha_registro": now()}
+    user = {field: "" for field in USERS.fields}  # incluye los campos de la ficha, vacíos
+    user.update({"usuario": username, "contraseña": password, "nombre": name, "rol": role, "estado": status,
+                 "registrado_por": registered_by, "fecha_registro": now()})
     users.append(user)
     return user, None
 
@@ -332,7 +376,8 @@ class Handler(SimpleHTTPRequestHandler):
             client = self.auth("cliente")
             if client:
                 with lock:
-                    mine = [u for u in read_users() if u["registrado_por"].lower() == client["usuario"].lower()]
+                    mine = [u for u in read_users() if client["usuario"].lower()
+                            in (u["registrado_por"].lower(), u["cliente"].lower())]
                 self.send_json(HTTPStatus.OK, {"elders": [public_user(u) for u in mine]})
 
         elif path == "/api/admin/users":
@@ -371,11 +416,24 @@ class Handler(SimpleHTTPRequestHandler):
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
         if path == "/api/register":
-            role = data.get("role") if data.get("role") in SELF_SIGNUP_ROLES else "usuario"
+            role = data.get("role")
+            if role not in SELF_SIGNUP_ROLES:
+                return self.fail(HTTPStatus.BAD_REQUEST,
+                                 "Elija «Familiar responsable» o «Cuidador/a». Las cuentas de adultos mayores las crea su familiar.")
+            # Familiar responsable y cuidador: dirección, celular y correo obligatorios.
+            extra = {"direccion": clean(data.get("address"), 120), "celular": clean(data.get("mobile"), 20),
+                     "email": clean(data.get("email"), 80)}
+            if not extra["direccion"]:
+                return self.fail(HTTPStatus.BAD_REQUEST, "Escriba su dirección.")
+            if not PHONE_RE.match(extra["celular"]):
+                return self.fail(HTTPStatus.BAD_REQUEST, "Escriba un número de celular válido (7 a 20 dígitos).")
+            if not EMAIL_RE.match(extra["email"]):
+                return self.fail(HTTPStatus.BAD_REQUEST, "Escriba un correo electrónico válido.")
             with lock:
                 users = read_users()
                 user, error = new_account(users, data, role, "activo")
                 if user:
+                    user.update(extra)
                     USERS.write(users)
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
@@ -390,6 +448,7 @@ class Handler(SimpleHTTPRequestHandler):
                 users = read_users()
                 user, error = new_account(users, data, "usuario", "pendiente", client["usuario"])
                 if user:
+                    user["cliente"] = client["usuario"]  # queda asociado al familiar que lo registró
                     USERS.write(users)
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
@@ -412,13 +471,17 @@ class Handler(SimpleHTTPRequestHandler):
 
         # ---- administración
         if path == "/api/admin/users":
+            # El administrador crea un usuario (adulto mayor) con su ficha y su cliente asociado.
             if not self.auth("admin"):
                 return
-            role = data.get("role") if data.get("role") in ROLES else "usuario"
             with lock:
                 users = read_users()
-                user, error = new_account(users, data, role, "activo")
+                profile, error = elder_profile(data, users)
+                user = None
+                if not error:
+                    user, error = new_account(users, data, "usuario", "activo")
                 if user:
+                    user.update(profile)
                     USERS.write(users)
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
@@ -478,6 +541,35 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.auth("admin"):
                 return
             return self.save_caregiver(data, m.group(1))
+
+        m = re.fullmatch(r"/api/admin/users/([^/]+)", path)
+        if m:
+            # Editar un usuario: nombre, ficha (si es adulto mayor) y, opcionalmente, la contraseña.
+            if not self.auth("admin"):
+                return
+            name = str(data.get("name", "")).strip()
+            error = validate_name(name)
+            if error:
+                return self.fail(HTTPStatus.BAD_REQUEST, error)
+            new_password = str(data.get("newPassword") or "")
+            if new_password and (len(new_password) < 4 or ";" in new_password or "\n" in new_password):
+                return self.fail(HTTPStatus.BAD_REQUEST, "La nueva contraseña debe tener al menos 4 caracteres y no contener «;».")
+            with lock:
+                users = read_users()
+                user = find_user(users, m.group(1))
+                if not user:
+                    return self.fail(HTTPStatus.NOT_FOUND, "El usuario no existe.")
+                if user["rol"] == "usuario":
+                    profile, error = elder_profile(data, users)
+                    if error:
+                        return self.fail(HTTPStatus.BAD_REQUEST, error)
+                    user.update(profile)
+                user["nombre"] = name
+                if new_password:
+                    user["contraseña"] = new_password
+                USERS.write(users)
+            return self.send_json(HTTPStatus.OK, {"user": public_user(user)})
+
         self.fail(HTTPStatus.NOT_FOUND, "Ruta no encontrada.")
 
     # --- DELETE
@@ -614,7 +706,11 @@ def main():
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
     with lock:
         # Crea los archivos si no existen y actualiza el formato de users.txt de versiones anteriores.
-        USERS.write(read_users())
+        users = read_users()
+        for u in users:  # adultos mayores registrados por un cliente antes de existir el campo «cliente»
+            if u["rol"] == "usuario" and not u["cliente"] and u["registrado_por"]:
+                u["cliente"] = u["registrado_por"]
+        USERS.write(users)
         migrate_caregivers()
         SOS.read()
     server = ThreadingHTTPServer(("127.0.0.1", port), Handler)

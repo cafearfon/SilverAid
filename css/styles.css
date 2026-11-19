@@ -342,7 +342,16 @@ table.data tr.row-editing td:first-child { box-shadow: inset 4px 0 0 var(--accen
 .check-group label { display: flex; align-items: center; gap: .4rem; font-weight: 400; }
 .check-group input { width: 1.2rem; height: 1.2rem; min-height: 0; accent-color: var(--primary); }
 #elders-card { border-color: var(--accent); }
-#btn-toggle-cg { margin-bottom: 1rem; }
+.elder-line { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; padding: .15rem 0; }
+#btn-toggle-cg, #btn-toggle-user { margin-bottom: 1rem; }
+#users-filter { margin-bottom: .8rem; }
+table.data td.actions.stack { white-space: normal; width: 1%; }
+table.data td.actions.stack .btn { display: block; width: 100%; white-space: nowrap; }
+table.data td.actions.stack .btn + .btn { margin: .35rem 0 0; }
+.blood {
+  display: inline-grid; place-items: center; min-width: 2.6rem; padding: .15rem .45rem; border-radius: 8px;
+  background: var(--danger-soft); color: var(--danger); font-weight: 800;
+}
 .cg-form-card { border: 2px solid var(--primary); }
 .small-text { font-size: .9rem; margin: 0; }
 .nowrap { white-space: nowrap; }
