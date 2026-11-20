@@ -485,11 +485,13 @@ def sign_up(data, role, registered_by=""):
             return None, "El documento del usuario no puede ser el mismo que el del familiar responsable."
         elder = {"nombre": elder_name[:80], "tipo_documento": e_type, "documento": e_doc,
                  "direccion": clean(data.get("elderAddress"), 120), "celular": clean(data.get("elderMobile"), 20),
-                 "email": clean(data.get("elderEmail"), 80)}
+                 "email": clean(data.get("elderEmail"), 80), "tipo_sangre": str(data.get("elderBloodType") or "")}
         if not elder["direccion"]:
             return None, "Escriba la dirección del usuario (adulto mayor)."
         if not PHONE_RE.match(elder["celular"]):
             return None, "Escriba un celular válido para el usuario (7 a 20 dígitos)."
+        if elder["tipo_sangre"] not in BLOOD_TYPES:
+            return None, "Seleccione el tipo de sangre del usuario."
         if elder["email"] and not EMAIL_RE.match(elder["email"]):
             return None, "El correo electrónico del usuario no es válido."
     with lock:

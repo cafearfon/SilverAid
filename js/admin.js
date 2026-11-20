@@ -442,12 +442,14 @@
       if (!f.elderDocType.value || !docOk(f.elderDocType.value, v('elderDocument'))) return clientError('Revise el tipo y número de documento del usuario.');
       if (!v('elderAddress')) return clientError('Escriba la dirección del usuario (adulto mayor).');
       if (!/^[0-9+()\-\s]{7,20}$/.test(v('elderMobile'))) return clientError('Escriba un celular válido para el usuario (7 a 20 dígitos).');
+      if (!f.elderBloodType.value) return clientError('Seleccione el tipo de sangre del usuario.');
       if (v('elderEmail') && !/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(v('elderEmail'))) return clientError('El correo electrónico del usuario no es válido.');
       clientError('');
       const body = {
         name: v('name'), docType: f.docType.value, document: v('document'), address: v('address'), mobile: v('mobile'), email: v('email'),
         elderName: v('elderName'), elderDocType: f.elderDocType.value, elderDocument: v('elderDocument'),
         elderAddress: v('elderAddress'), elderMobile: v('elderMobile'), elderEmail: v('elderEmail'),
+        elderBloodType: f.elderBloodType.value,
         username: v('username'), password: f.password.value,
       };
       try {
