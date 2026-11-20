@@ -138,6 +138,14 @@
     speechSynthesis.speak(u);
   };
 
+  /** Citas de hoy en adelante, de la más cercana a la más lejana. */
+  SA.upcomingAppointments = () => {
+    const today = SA.dateKey();
+    return SA.state.appointments
+      .filter((a) => a.date >= today)
+      .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
+  };
+
   SA.contactOptions = (selected) =>
     SA.state.contacts.map((c) => `<option ${c.name === selected ? 'selected' : ''}>${SA.esc(c.name)}</option>`).join('');
 })();

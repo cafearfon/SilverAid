@@ -43,18 +43,58 @@
           <label><input type="radio" name="role" value="cuidador"> <span><strong>🧑‍⚕️ Cuidador/a</strong><small>Ofrezco cuidados y acompañamiento</small></span></label>
         </fieldset>
         <p class="small-text muted">¿Es usted un adulto mayor? Su familiar responsable crea su cuenta desde SilverAid.</p>
-        <label>Nombre y apellidos <input name="name" autocomplete="name" required maxlength="80" placeholder="Ej. Laura Gómez Ruiz"></label>
-        <label>Dirección <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
-        <label>Celular <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
-        <label>Correo electrónico <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. laura@correo.com"></label>
-        <label>Usuario <input name="username" autocomplete="username" required placeholder="Letras y números, sin espacios"></label>
-        <label>Contraseña
-          <span class="pw-field">
-            <input name="password" type="password" autocomplete="new-password" required>
-            <button type="button" class="btn ghost small pw-toggle" aria-label="Mostrar contraseña">Ver</button>
-          </span>
-        </label>
-        <label>Repita la contraseña <input name="password2" type="password" autocomplete="new-password" required></label>
+        <fieldset class="form-section reg-panel">
+          <legend id="self-legend">👨‍👩‍👧 Datos del familiar responsable</legend>
+          <label>Nombre y apellidos * <input name="name" autocomplete="name" required maxlength="80" placeholder="Ej. Laura Gómez Ruiz"></label>
+          <div class="form-row" id="self-doc">
+            <label>Tipo de documento *
+              <select name="docType" required>
+                <option value="">Seleccione…</option>
+                <option value="CC">Cédula de ciudadanía</option>
+                <option value="CE">Cédula de extranjería</option>
+                <option value="PA">Pasaporte</option>
+                <option value="PPT">Permiso por protección temporal</option>
+              </select>
+            </label>
+            <label>Número de documento * <input name="document" inputmode="numeric" required maxlength="20" placeholder="Ej. 1052345678"></label>
+          </div>
+          <label>Dirección * <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
+          <label>Celular * <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
+          <label>Correo electrónico * <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. laura@correo.com"></label>
+        </fieldset>
+
+        <fieldset class="form-section reg-panel elder-panel" id="elder-panel">
+          <legend>👵 Datos del usuario (adulto mayor)</legend>
+          <p class="small-text muted">La persona mayor a su cargo. Su cuenta quedará pendiente hasta que el administrador de SilverAid la revise y le dé de alta.</p>
+          <label>Nombre completo * <input name="elderName" required maxlength="80" placeholder="Ej. Carmen Ruiz de Gómez"></label>
+          <div class="form-row">
+            <label>Tipo de documento *
+              <select name="elderDocType" required>
+                <option value="">Seleccione…</option>
+                <option value="CC">Cédula de ciudadanía</option>
+                <option value="CE">Cédula de extranjería</option>
+                <option value="PA">Pasaporte</option>
+                <option value="PPT">Permiso por protección temporal</option>
+              </select>
+            </label>
+            <label>Número de documento * <input name="elderDocument" inputmode="numeric" required maxlength="20" placeholder="Ej. 23456789"></label>
+          </div>
+          <label>Dirección * <input name="elderAddress" required maxlength="120" placeholder="Ej. Carrera 9 # 20-15, Tunja"></label>
+          <label>Celular * <input name="elderMobile" type="tel" required maxlength="20" placeholder="Ej. 310 765 4321"></label>
+          <label>Correo electrónico (opcional) <input name="elderEmail" type="email" maxlength="80" placeholder="Ej. carmen@correo.com"></label>
+        </fieldset>
+
+        <fieldset class="form-section reg-panel">
+          <legend>🔐 Su acceso a SilverAid</legend>
+          <label>Usuario * <input name="username" autocomplete="username" required placeholder="Letras y números, sin espacios"></label>
+          <label>Contraseña *
+            <span class="pw-field">
+              <input name="password" type="password" autocomplete="new-password" required>
+              <button type="button" class="btn ghost small pw-toggle" aria-label="Mostrar contraseña">Ver</button>
+            </span>
+          </label>
+          <label>Repita la contraseña * <input name="password2" type="password" autocomplete="new-password" required></label>
+        </fieldset>
         <p class="form-error" role="alert" hidden></p>
         <button class="btn big">Crear cuenta y entrar</button>
       </form>
@@ -85,6 +125,21 @@
         location.replace(SAAuth.home(data.user.role));
       }
 
+      /** Mismas reglas que el servidor: CC y CE solo dígitos; pasaporte y PPT letras y números. */
+      function docOk(type, value) {
+        const v = value.replace(/[.\s]/g, '');
+        return ['CC', 'CE'].includes(type) ? /^[0-9]{4,12}$/.test(v) : /^[A-Za-z0-9]{4,20}$/.test(v);
+      }
+
+      // Documento y datos del adulto mayor: solo para el familiar responsable.
+      function syncRole() {
+        const isClient = reg.elements.role.value === 'cliente';
+        document.getElementById('self-legend').textContent = isClient ? '👨‍👩‍👧 Datos del familiar responsable' : '🧑‍⚕️ Sus datos';
+        document.getElementById('self-doc').hidden = !isClient;
+        document.getElementById('elder-panel').hidden = !isClient;
+      }
+      reg.querySelectorAll('input[name="role"]').forEach((r) => r.addEventListener('change', syncRole));
+
       document.querySelectorAll('[data-show]').forEach((b) => b.addEventListener('click', () => show(b.dataset.show)));
       document.querySelectorAll('.pw-toggle').forEach((b) => b.addEventListener('click', () => {
         const input = b.previousElementSibling;
@@ -112,15 +167,35 @@
         const f = e.target;
         const role = f.elements.role.value;
         if (!f.elements.name.value.trim()) return showError(f, 'Escriba su nombre y apellidos.');
+        const isClient = role === 'cliente';
+        if (isClient) {
+          if (!f.docType.value) return showError(f, 'Seleccione su tipo de documento.');
+          if (!docOk(f.docType.value, f.document.value)) return showError(f, 'Revise su número de documento.');
+        }
         if (!f.address.value.trim()) return showError(f, 'Escriba su dirección.');
         if (!/^[0-9+()\-\s]{7,20}$/.test(f.mobile.value.trim())) return showError(f, 'Escriba un número de celular válido.');
         if (!/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(f.email.value.trim())) return showError(f, 'Escriba un correo electrónico válido.');
+        if (isClient) {
+          if (!f.elderName.value.trim()) return showError(f, 'Escriba el nombre completo del usuario (adulto mayor).');
+          if (!f.elderDocType.value) return showError(f, 'Seleccione el tipo de documento del usuario.');
+          if (!docOk(f.elderDocType.value, f.elderDocument.value)) return showError(f, 'Revise el número de documento del usuario.');
+          if (!f.elderAddress.value.trim()) return showError(f, 'Escriba la dirección del usuario (adulto mayor).');
+          if (!/^[0-9+()\-\s]{7,20}$/.test(f.elderMobile.value.trim())) return showError(f, 'Escriba un celular válido para el usuario.');
+          if (f.elderEmail.value.trim() && !/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(f.elderEmail.value.trim())) return showError(f, 'El correo electrónico del usuario no es válido.');
+        }
         if (f.password.value !== f.password2.value) return showError(f, 'Las contraseñas no coinciden.');
         showError(f, '');
         const body = {
           name: f.elements.name.value.trim(), address: f.address.value.trim(), mobile: f.mobile.value.trim(),
           email: f.email.value.trim(), username: f.username.value.trim(), password: f.password.value, role,
         };
+        if (isClient) {
+          Object.assign(body, {
+            docType: f.docType.value, document: f.document.value.trim(),
+            elderName: f.elderName.value.trim(), elderDocType: f.elderDocType.value, elderDocument: f.elderDocument.value.trim(),
+            elderAddress: f.elderAddress.value.trim(), elderMobile: f.elderMobile.value.trim(), elderEmail: f.elderEmail.value.trim(),
+          });
+        }
         try {
           await SAAuth.api('/api/register', { method: 'POST', body });
           enter(await SAAuth.api('/api/login', { method: 'POST', body }));
@@ -135,6 +210,7 @@
         show('register');
         if (m[1]) reg.querySelector(`input[name="role"][value="${m[1]}"]`).checked = true;
       }
+      syncRole();
 
       // Si ya hay una sesión válida, entra directamente.
       if (SAAuth.get()) {

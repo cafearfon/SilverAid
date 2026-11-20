@@ -35,6 +35,7 @@
   <nav class="tabs" id="tabs" aria-label="Secciones de administración">
     <button data-tab="users" class="active">👥 Usuarios</button>
     <button data-tab="clients">👨‍👩‍👧 Clientes</button>
+    <button data-tab="catalog">📋 Catálogo</button>
     <button data-tab="caregivers">🧑‍⚕️ Cuidadores</button>
     <button data-tab="pending">⏳ Altas pendientes <span class="count" id="count-pending" hidden></span></button>
     <button data-tab="sos">🚨 Llamadas SOS <span class="count" id="count-sos" hidden></span></button>
@@ -44,13 +45,115 @@
     <!-- ============ CLIENTES (familiares responsables) ============ -->
     <section id="tab-clients" class="view">
       <h1>👨‍👩‍👧 Clientes</h1>
-      <p class="muted">Familiares responsables y los adultos mayores que han registrado.</p>
+      <p class="muted">Familiares responsables y los adultos mayores que han registrado. Desde aquí puede enviarles el <a href="#catalog" data-goto-tab="catalog">catálogo de servicios</a> por WhatsApp o por correo.</p>
       <div class="table-wrap card flush">
         <table class="data">
-          <thead><tr><th>Cliente</th><th>Contacto</th><th>Estado</th><th>Fecha de registro</th><th>Familiares registrados</th><th>Acciones</th></tr></thead>
+          <thead><tr><th>Cliente</th><th>Contacto</th><th>Estado</th><th>Fecha de registro</th><th>Familiares registrados</th><th>Catálogo de servicios</th><th>Acciones</th></tr></thead>
           <tbody id="clients-body"></tbody>
         </table>
       </div>
+
+      <button class="btn" id="btn-toggle-client" aria-expanded="false" aria-controls="client-form-card">➕ Crear cliente</button>
+
+      <article class="card cg-form-card" id="client-form-card" hidden>
+        <h2>Crear cliente</h2>
+        <p class="muted small-text">Los mismos datos que pide el registro público. El adulto mayor queda pendiente de alta: su usuario será su número de documento y la contraseña se la asigna después en «Usuarios».</p>
+        <form id="form-client" class="form" novalidate>
+          <fieldset class="form-section reg-panel">
+            <legend>👨‍👩‍👧 Datos del familiar responsable</legend>
+            <div class="form-row">
+              <label>Nombre y apellidos * <input name="name" required maxlength="80"></label>
+              <label>Tipo de documento *
+                <select name="docType" required>
+                  <option value="">Seleccione…</option>
+                  <option value="CC">Cédula de ciudadanía</option>
+                  <option value="CE">Cédula de extranjería</option>
+                  <option value="PA">Pasaporte</option>
+                  <option value="PPT">Permiso por protección temporal</option>
+                </select>
+              </label>
+              <label>Número de documento * <input name="document" inputmode="numeric" required maxlength="20"></label>
+            </div>
+            <div class="form-row">
+              <label>Dirección * <input name="address" required maxlength="120"></label>
+              <label>Celular * <input name="mobile" type="tel" required maxlength="20"></label>
+              <label>Correo electrónico * <input name="email" type="email" required maxlength="80"></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section reg-panel elder-panel">
+            <legend>👵 Datos del usuario (adulto mayor)</legend>
+            <div class="form-row">
+              <label>Nombre completo * <input name="elderName" required maxlength="80"></label>
+              <label>Tipo de documento *
+                <select name="elderDocType" required>
+                  <option value="">Seleccione…</option>
+                  <option value="CC">Cédula de ciudadanía</option>
+                  <option value="CE">Cédula de extranjería</option>
+                  <option value="PA">Pasaporte</option>
+                  <option value="PPT">Permiso por protección temporal</option>
+                </select>
+              </label>
+              <label>Número de documento * <input name="elderDocument" inputmode="numeric" required maxlength="20"></label>
+            </div>
+            <div class="form-row">
+              <label>Dirección * <input name="elderAddress" required maxlength="120"></label>
+              <label>Celular * <input name="elderMobile" type="tel" required maxlength="20"></label>
+              <label>Correo electrónico (opcional) <input name="elderEmail" type="email" maxlength="80"></label>
+            </div>
+          </fieldset>
+
+          <fieldset class="form-section reg-panel">
+            <legend>🔐 Acceso del cliente a SilverAid</legend>
+            <div class="form-row">
+              <label>Usuario * <input name="username" required pattern="[A-Za-z0-9_.\-]{3,30}" title="3 a 30 caracteres: letras, números, punto, guion o guion bajo"></label>
+              <label>Contraseña * <input name="password" required minlength="4"></label>
+            </div>
+          </fieldset>
+          <p class="form-error" role="alert" hidden></p>
+          <div class="row-actions">
+            <button class="btn">Crear cliente</button>
+            <button type="button" class="btn ghost" id="btn-cancel-client">Cancelar</button>
+          </div>
+        </form>
+      </article>
+    </section>
+
+    <!-- ============ CATÁLOGO DE SERVICIOS ============ -->
+    <section id="tab-catalog" class="view">
+      <h1>📋 Catálogo de servicios</h1>
+      <p class="muted">Lo que se envía a los clientes con «Enviar catálogo». Solo se incluyen los servicios activos. Guardado en <code>data/services.txt</code>.</p>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Servicio</th><th>Descripción</th><th>Precio</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody id="services-body"></tbody>
+        </table>
+      </div>
+
+      <button class="btn" id="btn-toggle-service" aria-expanded="false" aria-controls="service-form-card">➕ Añadir servicio</button>
+
+      <article class="card cg-form-card" id="service-form-card" hidden>
+        <h2 id="service-form-title">Añadir servicio</h2>
+        <form id="form-service" class="form">
+          <div class="form-row">
+            <label>Nombre del servicio * <input name="name" required maxlength="80" placeholder="Ej. Compañía y paseos"></label>
+            <label>Precio (opcional) <input name="price" maxlength="40" placeholder="Ej. $25.000 / hora"></label>
+          </div>
+          <label>Descripción <textarea name="description" rows="2" maxlength="400" placeholder="Qué incluye el servicio"></textarea></label>
+          <label class="switch"><input type="checkbox" name="active" checked> Activo (se incluye al enviar el catálogo)</label>
+          <p class="form-error" role="alert" hidden></p>
+          <div class="row-actions">
+            <button class="btn" id="service-submit">Añadir servicio</button>
+            <button type="button" class="btn ghost" id="btn-cancel-service">Cancelar</button>
+          </div>
+        </form>
+      </article>
+
+      <article class="card">
+        <h2>Vista previa del mensaje</h2>
+        <p class="muted small-text">Así lo recibe el cliente (con su nombre en el saludo).</p>
+        <pre class="catalog-preview" id="catalog-preview"></pre>
+      </article>
     </section>
 
     <!-- ============ LLAMADAS DEL BOTÓN DE PÁNICO ============ -->

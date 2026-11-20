@@ -1,0 +1,47 @@
+# SilverAid con MySQL.
+#   1. cp .env.example .env   y cambie las contraseñas
+#   2. docker compose up -d --build
+#   3. abra http://IP-DEL-NAS:8000   (usuario admin, contraseña ADMIN_PASSWORD)
+services:
+  db:
+    image: mysql:8.4
+    container_name: silveraid-db
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?Defina MYSQL_ROOT_PASSWORD en .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-silveraid}
+      MYSQL_USER: ${MYSQL_USER:-silveraid}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?Defina MYSQL_PASSWORD en .env}
+      TZ: ${TZ:-America/Bogota}
+    command: ["--character-set-server=utf8mb4", "--collation-server=utf8mb4_0900_ai_ci"]
+    volumes:
+      - ./mysql-data:/var/lib/mysql      # datos de MySQL en una carpeta del NAS (incluir en copias de seguridad)
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u root -p\"$$MYSQL_ROOT_PASSWORD\" --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    # Sin «ports»: MySQL solo es accesible desde la aplicación, no desde la red.
+
+  app:
+    build: .
+    image: silveraid:latest
+    container_name: silveraid-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      STORAGE: mysql
+      MYSQL_HOST: db
+      MYSQL_PORT: 3306
+      MYSQL_DATABASE: ${MYSQL_DATABASE:-silveraid}
+      MYSQL_USER: ${MYSQL_USER:-silveraid}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Defina ADMIN_PASSWORD en .env}
+      TZ: ${TZ:-America/Bogota}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./data:/data:ro                  # opcional: .txt de la versión anterior, se importan al crear las tablas

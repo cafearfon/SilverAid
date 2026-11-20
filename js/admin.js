@@ -1,4 +1,4 @@
-/* Página de administración: llamadas SOS, altas pendientes, cuidadores y usuarios. */
+/* Página de administración: llamadas SOS, altas pendientes, cuidadores, usuarios, clientes y catálogo de servicios. */
 (function () {
   const session = SAAuth.get();
   if (!session || session.role !== 'admin') return; // admin.html ya redirige
@@ -15,6 +15,7 @@
   const isSelf = (u) => u.toLowerCase() === session.username.toLowerCase();
 
   let users = [];
+  let services = [];
   let calls = [];
   let sosFilter = 'pendiente';
   let attending = null;     // id de la llamada que se está atendiendo (formulario abierto)
@@ -145,7 +146,7 @@
           const elders = users.filter((u) => u.role === 'usuario' && (u.client || '').toLowerCase() === c.username.toLowerCase());
           return `
         <tr>
-          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span></td>
+          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span>${docText(c)}</td>
           <td>${c.mobile ? `📱 ${esc(c.mobile)}` : '<span class="muted">Sin celular</span>'}${c.email ? `<span class="sub">${esc(c.email)}</span>` : ''}${c.address ? `<span class="sub">${esc(c.address)}</span>` : ''}</td>
           <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span></td>
           <td>${fmt(c.registeredAt)}</td>
@@ -153,13 +154,99 @@
             ? elders.map((e) => `<div class="elder-line">${esc(e.name)} <span class="pill ${e.status}">${STATUS[e.status] || esc(e.status)}</span>
                 ${e.status === 'pendiente' ? `<button class="btn ok small" data-status="activo" data-user="${esc(e.username)}">Dar de alta</button>` : ''}</div>`).join('')
             : '<span class="muted">Ninguno</span>'}</td>
+          <td>
+            <div class="send-btns">
+              <button class="btn whatsapp small" data-send="whatsapp" data-user="${esc(c.username)}" ${c.mobile ? '' : 'disabled title="Sin celular"'}>📲 WhatsApp</button>
+              <button class="btn ghost small" data-send="email" data-user="${esc(c.username)}" ${c.email ? '' : 'disabled title="Sin correo"'}>✉️ Correo</button>
+            </div>
+            <span class="sub">${c.catalogSent ? 'Último envío: ' + esc(c.catalogSent.replace(/^(\S+) (\S+)/, (_, d, h) => fmt(d + ' ' + h))) : 'Nunca enviado'}</span>
+          </td>
           <td class="actions">${c.status === 'activo'
             ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(c.username)}">Inactivar</button>`
             : `<button class="btn ok small" data-status="activo" data-user="${esc(c.username)}">Activar</button>`}</td>
         </tr>`;
         }).join('')
-      : '<tr><td colspan="6" class="empty">Todavía no hay clientes registrados.</td></tr>';
+      : '<tr><td colspan="7" class="empty">Todavía no hay clientes registrados.</td></tr>';
   }
+
+  const docText = (u) => (u.document ? `<span class="sub">🪪 ${esc(u.docType)} ${esc(u.document)}</span>` : '');
+  const noPassword = (u) => (u.hasPassword ? '' : '<span class="sub warn-text">⚠️ Sin contraseña: asígnela en «Editar»</span>');
+
+  // ---------------------------------------------------------------- catálogo de servicios
+  async function loadServices() {
+    try {
+      services = (await api('/api/admin/services')).services;
+    } catch (err) { return handleError(err); }
+    renderServices();
+  }
+
+  function renderServices() {
+    $('services-body').innerHTML = services.length
+      ? services.map((s) => `
+        <tr class="${s.id === editingService ? 'row-editing' : ''}">
+          <td><strong>${esc(s.name)}</strong></td>
+          <td>${s.description ? esc(s.description) : '<span class="muted">—</span>'}</td>
+          <td class="nowrap">${s.price ? esc(s.price) : '<span class="muted">—</span>'}</td>
+          <td><span class="pill ${s.active ? 'activo' : 'inactivo'}">${s.active ? 'Activo' : 'Oculto'}</span></td>
+          <td class="actions stack">
+            <button class="btn small" data-edit-service="${esc(s.id)}">✏️ Editar</button>
+            <button class="btn ghost small" data-toggle-service="${esc(s.id)}">${s.active ? 'Ocultar' : 'Activar'}</button>
+            <button class="btn ghost small" data-delete-service="${esc(s.id)}">Eliminar</button>
+          </td>
+        </tr>`).join('')
+      : '<tr><td colspan="5" class="empty">El catálogo está vacío. Añada al menos un servicio para poder enviarlo.</td></tr>';
+    $('catalog-preview').textContent = catalogMessage('Laura') || 'No hay servicios activos.';
+  }
+
+  /** Texto del catálogo (servicios activos) con el nombre del cliente en el saludo. */
+  function catalogMessage(name) {
+    const active = services.filter((s) => s.active);
+    if (!active.length) return '';
+    const first = String(name || '').trim().split(/\s+/)[0];
+    return [
+      `Hola ${first}, le compartimos el catálogo de servicios de SilverAid:`,
+      '',
+      ...active.map((s) => `• ${s.name}${s.price ? ` (${s.price})` : ''}${s.description ? `\n   ${s.description}` : ''}`),
+      '',
+      'Para contratar un servicio o resolver cualquier duda, responda a este mensaje.',
+      'Equipo SilverAid',
+    ].join('\n');
+  }
+
+  /** Número para wa.me: solo dígitos y, si es un celular colombiano de 10 dígitos, con el prefijo 57. */
+  function whatsappNumber(mobile) {
+    const digits = String(mobile || '').replace(/\D/g, '');
+    return /^3\d{9}$/.test(digits) ? '57' + digits : digits;
+  }
+
+  /** Abre WhatsApp o el correo con el catálogo y anota el envío en la ficha del cliente. */
+  async function sendCatalog(username, channel) {
+    const c = users.find((u) => u.username === username);
+    if (!c) return;
+    const text = catalogMessage(c.name);
+    if (!text) { toast('El catálogo no tiene servicios activos. Añádalos en la pestaña «Catálogo».', 'warn'); return; }
+    // Se abre en el mismo clic (si no, el navegador puede bloquear la ventana).
+    if (channel === 'whatsapp') {
+      window.open(`https://wa.me/${whatsappNumber(c.mobile)}?text=${encodeURIComponent(text)}`, '_blank', 'noopener');
+    } else {
+      const a = document.createElement('a');
+      a.href = `mailto:${encodeURIComponent(c.email)}?subject=${encodeURIComponent('Catálogo de servicios SilverAid')}&body=${encodeURIComponent(text)}`;
+      a.click();
+    }
+    try {
+      await api(`/api/admin/users/${encodeURIComponent(username)}/catalog`, { method: 'POST', body: { channel } });
+      toast(`Catálogo preparado para ${c.name} por ${channel === 'whatsapp' ? 'WhatsApp' : 'correo'}. Revise y pulse «Enviar» en la ventana que se abrió.`, 'ok', 8000);
+    } catch (err) { handleError(err); }
+    loadUsers();
+  }
+
+  /** Mismas reglas que el servidor: CC y CE solo dígitos; pasaporte y PPT letras y números. */
+  function docOk(type, value) {
+    const v = String(value || '').replace(/[.\s]/g, '');
+    return ['CC', 'CE'].includes(type) ? /^[0-9]{4,12}$/.test(v) : /^[A-Za-z0-9]{4,20}$/.test(v);
+  }
+
+  let editingService = null;
 
   function nameOf(username) {
     const u = users.find((x) => x.username.toLowerCase() === (username || '').toLowerCase());
@@ -172,7 +259,7 @@
     $('pending-body').innerHTML = pending.length
       ? pending.map((u) => `
         <tr>
-          <td><strong>${esc(u.name)}</strong></td>
+          <td><strong>${esc(u.name)}</strong>${docText(u)}${noPassword(u)}</td>
           <td>@${esc(u.username)}</td>
           <td>${nameOf(u.registeredBy)}</td>
           <td>${fmt(u.registeredAt)}</td>
@@ -193,7 +280,7 @@
     $('users-body').innerHTML = elders.length
       ? elders.map((u) => `
       <tr class="${u.username === editingUser ? 'row-editing' : ''}">
-        <td><strong>${esc(u.name)}</strong><span class="sub">@${esc(u.username)}</span></td>
+        <td><strong>${esc(u.name)}</strong><span class="sub">@${esc(u.username)}</span>${docText(u)}${noPassword(u)}</td>
         <td>${u.phone ? `☎️ ${esc(u.phone)}` : ''}${u.mobile ? `<span class="sub">📱 ${esc(u.mobile)}</span>` : ''}${u.email ? `<span class="sub">${esc(u.email)}</span>` : ''}${!u.phone && !u.mobile ? '<span class="muted">Sin datos</span>' : ''}</td>
         <td>${u.address ? esc(u.address) : '<span class="muted">—</span>'}</td>
         <td>${u.bloodType ? `<span class="blood">${esc(u.bloodType)}</span>` : '<span class="muted">—</span>'}</td>
@@ -315,8 +402,122 @@
       if (b.dataset.reject && confirmed(b, '¿Rechazar? Pulse otra vez')) deleteUser(b.dataset.reject);
     });
     $('clients-body').addEventListener('click', (e) => {
+      const send = e.target.closest('button[data-send]');
+      if (send) return sendCatalog(send.dataset.user, send.dataset.send);
       const b = e.target.closest('button[data-status]');
       if (b) setStatus(b.dataset.user, b.dataset.status);
+    });
+    document.querySelectorAll('[data-goto-tab]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); showTab(a.dataset.gotoTab); }));
+
+    // Clientes: formulario «Crear cliente»
+    const clientForm = $('form-client');
+    const clientError = (msg) => {
+      const p = clientForm.querySelector('.form-error');
+      p.textContent = msg || '';
+      p.hidden = !msg;
+    };
+    function toggleClientForm(open) {
+      $('client-form-card').hidden = !open;
+      $('btn-toggle-client').setAttribute('aria-expanded', String(open));
+      $('btn-toggle-client').textContent = open ? '✕ Cerrar formulario' : '➕ Crear cliente';
+      if (open) {
+        clientForm.reset();
+        clientError('');
+        $('client-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        clientForm.elements.name.focus({ preventScroll: true });
+      }
+    }
+    $('btn-toggle-client').addEventListener('click', () => toggleClientForm($('client-form-card').hidden));
+    $('btn-cancel-client').addEventListener('click', () => toggleClientForm(false));
+    clientForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = clientForm.elements;
+      const v = (k) => f[k].value.trim();
+      if (!v('name')) return clientError('Escriba el nombre del familiar responsable.');
+      if (!f.docType.value || !docOk(f.docType.value, v('document'))) return clientError('Revise el tipo y número de documento del familiar responsable.');
+      if (!v('address')) return clientError('Escriba la dirección.');
+      if (!/^[0-9+()\-\s]{7,20}$/.test(v('mobile'))) return clientError('Escriba un celular válido (7 a 20 dígitos).');
+      if (!/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(v('email'))) return clientError('Escriba un correo electrónico válido.');
+      if (!v('elderName')) return clientError('Escriba el nombre completo del usuario (adulto mayor).');
+      if (!f.elderDocType.value || !docOk(f.elderDocType.value, v('elderDocument'))) return clientError('Revise el tipo y número de documento del usuario.');
+      if (!v('elderAddress')) return clientError('Escriba la dirección del usuario (adulto mayor).');
+      if (!/^[0-9+()\-\s]{7,20}$/.test(v('elderMobile'))) return clientError('Escriba un celular válido para el usuario (7 a 20 dígitos).');
+      if (v('elderEmail') && !/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(v('elderEmail'))) return clientError('El correo electrónico del usuario no es válido.');
+      clientError('');
+      const body = {
+        name: v('name'), docType: f.docType.value, document: v('document'), address: v('address'), mobile: v('mobile'), email: v('email'),
+        elderName: v('elderName'), elderDocType: f.elderDocType.value, elderDocument: v('elderDocument'),
+        elderAddress: v('elderAddress'), elderMobile: v('elderMobile'), elderEmail: v('elderEmail'),
+        username: v('username'), password: f.password.value,
+      };
+      try {
+        const { user } = await api('/api/admin/clients', { method: 'POST', body });
+        toast(`Cliente ${user.name} creado. Su familiar quedó en «Altas pendientes».`, 'ok', 7000);
+        toggleClientForm(false);
+        loadUsers();
+      } catch (err) {
+        if (err.status === 401 || err.status === 403) handleError(err); else clientError(err.message);
+      }
+    });
+
+    // Catálogo de servicios
+    const serviceForm = $('form-service');
+    const serviceError = (msg) => {
+      const p = serviceForm.querySelector('.form-error');
+      p.textContent = msg || '';
+      p.hidden = !msg;
+    };
+    function toggleServiceForm(open, s = null) {
+      editingService = open && s ? s.id : null;
+      $('service-form-card').hidden = !open;
+      $('btn-toggle-service').textContent = open && !s ? '✕ Cerrar formulario' : '➕ Añadir servicio';
+      $('btn-toggle-service').setAttribute('aria-expanded', String(open));
+      if (open) {
+        serviceForm.reset();
+        serviceError('');
+        $('service-form-title').textContent = s ? `Editar servicio: ${s.name}` : 'Añadir servicio';
+        $('service-submit').textContent = s ? 'Guardar cambios' : 'Añadir servicio';
+        if (s) {
+          const f = serviceForm.elements;
+          f.name.value = s.name; f.price.value = s.price; f.description.value = s.description; f.active.checked = s.active;
+        }
+        $('service-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        serviceForm.elements.name.focus({ preventScroll: true });
+      }
+      renderServices();
+    }
+    $('btn-toggle-service').addEventListener('click', () => toggleServiceForm($('service-form-card').hidden || !!editingService));
+    $('btn-cancel-service').addEventListener('click', () => toggleServiceForm(false));
+    serviceForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = serviceForm.elements;
+      const editing = editingService;
+      const body = { name: f.name.value.trim(), price: f.price.value.trim(), description: f.description.value.trim(), active: f.active.checked };
+      try {
+        await api('/api/admin/services' + (editing ? '/' + encodeURIComponent(editing) : ''), { method: editing ? 'PUT' : 'POST', body });
+        toast(editing ? 'Servicio actualizado.' : 'Servicio añadido al catálogo.', 'ok');
+        toggleServiceForm(false);
+        loadServices();
+      } catch (err) {
+        if (err.status === 401 || err.status === 403) handleError(err); else serviceError(err.message);
+      }
+    });
+    $('services-body').addEventListener('click', async (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      const s = services.find((x) => x.id === (b.dataset.editService || b.dataset.toggleService || b.dataset.deleteService));
+      if (!s) return;
+      if (b.dataset.editService) return toggleServiceForm(true, s);
+      try {
+        if (b.dataset.toggleService) {
+          await api('/api/admin/services/' + encodeURIComponent(s.id), { method: 'PUT', body: { ...s, active: !s.active } });
+        } else if (b.dataset.deleteService && confirmed(b)) {
+          if (s.id === editingService) toggleServiceForm(false);
+          await api('/api/admin/services/' + encodeURIComponent(s.id), { method: 'DELETE' });
+          toast(`Servicio «${s.name}» eliminado.`, 'ok');
+        } else return;
+      } catch (err) { handleError(err); }
+      loadServices();
     });
     // Usuarios: formulario oculto hasta pulsar «Crear usuario» o «Editar»
     const userForm = $('form-user');
@@ -530,6 +731,7 @@
     loadCalls();
     loadUsers();
     loadCaregivers();
+    loadServices();
     setInterval(() => { loadCalls(); loadUsers(); }, POLL_MS);
   });
 })();

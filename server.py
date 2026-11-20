@@ -1,26 +1,37 @@
 #!/usr/bin/env python3
-"""SilverAid — servidor local.
+"""SilverAid — servidor.
 
-Sirve la aplicación y una pequeña API. Todos los datos se guardan en archivos
-de texto dentro de data/, una línea por registro y campos separados por «;»:
+Sirve la aplicación y una pequeña API. Los datos se guardan en tres tablas:
 
-    data/users.txt       usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;
-                         direccion;telefono;celular;email;tipo_sangre;cliente  (ficha del adulto mayor)
-    data/caregivers.txt  ficha personal de cada cuidador; disponibilidad como «lun=8,9,10|mar=14,15»
-                         (día = horas de inicio de cada franja de 1 h, de 06:00 a 22:00)
-    data/sos.txt         registro de llamadas del botón de pánico
+    users        usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;
+                 direccion;telefono;celular;email;tipo_sangre;cliente  (ficha del adulto mayor);
+                 tipo_documento;documento  (familiar responsable y adulto mayor)
+    caregivers   ficha personal de cada cuidador; disponibilidad como «lun=8,9,10|mar=14,15»
+                 (día = horas de inicio de cada franja de 1 h, de 06:00 a 22:00)
+    sos          registro de llamadas del botón de pánico
+    services     catálogo de servicios que el administrador envía a los clientes
+
+Almacenamiento (variable STORAGE):
+    txt    (por defecto) archivos de texto en DATA_DIR: users.txt, caregivers.txt, sos.txt, services.txt
+    mysql  base de datos MySQL (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE).
+           Al crear las tablas por primera vez se importan los .txt de DATA_DIR si existen.
+
+Otras variables: HOST (127.0.0.1), PORT (8000), DATA_DIR (./data),
+                 ADMIN_PASSWORD (contraseña inicial de «admin»; por defecto «admin»).
 
 Roles:   usuario (adulto mayor), cliente (familiar responsable), cuidador, admin.
 Estados: activo, pendiente (esperando alta del administrador), inactivo.
 
-Uso:  python server.py [puerto]      (por defecto 8000)
+Uso:  python server.py [puerto]
 """
 import json
+import os
 import posixpath
 import re
 import secrets
 import sys
 import threading
+import time
 from datetime import datetime
 from http import HTTPStatus
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
@@ -28,10 +39,23 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent
-DATA = ROOT / "data"
+DATA = Path(os.environ.get("DATA_DIR") or ROOT / "data")
+HOST = os.environ.get("HOST", "127.0.0.1")
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", "8000"))
+STORAGE = os.environ.get("STORAGE", "txt").lower()
+ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or "admin"
+MYSQL = {
+    "host": os.environ.get("MYSQL_HOST", "127.0.0.1"),
+    "port": int(os.environ.get("MYSQL_PORT", "3306")),
+    "user": os.environ.get("MYSQL_USER", "silveraid"),
+    "password": os.environ.get("MYSQL_PASSWORD", ""),
+    "database": os.environ.get("MYSQL_DATABASE", "silveraid"),
+}
+if STORAGE not in ("txt", "mysql"):
+    sys.exit(f"STORAGE debe ser «txt» o «mysql» (se recibió «{STORAGE}»).")
 
 # Solo se sirven estos archivos y carpetas (nunca data/, server.py ni .git/).
-PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "/favicon.ico"}
+PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "/usuario.html", "/favicon.ico"}
 PUBLIC_DIRS = ("/css/", "/js/", "/assets/")
 
 ROLES = ("usuario", "cliente", "cuidador", "admin")
@@ -98,8 +122,11 @@ def clean(value, limit=300):
     return text.replace(";", ",").replace("\r", " ").replace("\n", " ").strip()[:limit]
 
 
-# --------------------------------------------------------------- archivos .txt
-class Table:
+# ------------------------------------------------------------ almacenamiento
+# Las dos implementaciones ofrecen lo mismo: read() → lista de diccionarios y write(lista).
+# Todas las llamadas se hacen dentro de `lock`, así que no hay escrituras simultáneas.
+
+class TextTable:
     """Archivo de texto con una cabecera «# campo;campo;…» y una línea por registro."""
 
     def __init__(self, filename, fields, seed=()):
@@ -107,17 +134,13 @@ class Table:
         self.fields = fields
         self.seed = seed
 
+    def setup(self):
+        self.read()
+
     def read(self):
         if not self.path.exists():
             self.write([dict(zip(self.fields, row)) for row in self.seed])
-        rows = []
-        for line in self.path.read_text(encoding="utf-8").splitlines():
-            if not line.strip() or line.startswith("#"):
-                continue
-            parts = line.split(";")
-            parts += [""] * (len(self.fields) - len(parts))  # líneas de versiones anteriores
-            rows.append(dict(zip(self.fields, parts)))
-        return rows
+        return read_text_rows(self.path, self.fields)
 
     def write(self, rows):
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -128,14 +151,130 @@ class Table:
         tmp.replace(self.path)
 
 
+def read_text_rows(path, fields):
+    rows = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        if not line.strip() or line.startswith("#"):
+            continue
+        parts = line.split(";")
+        parts += [""] * (len(fields) - len(parts))  # líneas de versiones anteriores
+        rows.append(dict(zip(fields, parts)))
+    return rows
+
+
+def mysql_connect():
+    import pymysql  # solo hace falta con STORAGE=mysql
+    return pymysql.connect(charset="utf8mb4", autocommit=False, connect_timeout=5, **MYSQL)
+
+
+class MySQLTable:
+    """Tabla MySQL con una columna por campo (el primero es la clave primaria) y `orden` para conservar el orden."""
+
+    LONG_FIELDS = {"disponibilidad", "nota", "direccion", "motivo", "descripcion"}
+
+    def __init__(self, filename, fields, seed=()):
+        self.legacy = DATA / filename                       # .txt a importar la primera vez
+        self.name = Path(filename).stem                      # users, caregivers, sos
+        self.fields = fields
+        self.seed = seed
+        self.cols = {f: f.replace("ñ", "n") for f in fields}  # «contraseña» → columna «contrasena»
+
+    def _coldef(self, field, i):
+        col = self.cols[field]
+        if i == 0:
+            return f"`{col}` VARCHAR(64) NOT NULL PRIMARY KEY"
+        if field in self.LONG_FIELDS:  # MySQL no admite valor por defecto en TEXT
+            return f"`{col}` TEXT NULL"
+        return f"`{col}` VARCHAR(255) NOT NULL DEFAULT ''"
+
+    def setup(self):
+        """Crea la tabla si no existe (con los datos de los .txt o los de ejemplo) y añade columnas nuevas."""
+        conn = mysql_connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute("SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = %s",
+                            (self.name,))
+                exists = cur.fetchone()[0] > 0
+                if not exists:
+                    cols = ", ".join(self._coldef(f, i) for i, f in enumerate(self.fields))
+                    cur.execute(f"CREATE TABLE `{self.name}` ({cols}, `orden` INT NOT NULL DEFAULT 0) "
+                                "ENGINE=InnoDB DEFAULT CHARSET=utf8mb4")
+                else:  # versiones nuevas pueden traer columnas nuevas
+                    cur.execute("SELECT column_name FROM information_schema.columns "
+                                "WHERE table_schema = DATABASE() AND table_name = %s", (self.name,))
+                    present = {r[0] for r in cur.fetchall()}
+                    for i, f in enumerate(self.fields):
+                        if self.cols[f] not in present:
+                            cur.execute(f"ALTER TABLE `{self.name}` ADD COLUMN {self._coldef(f, i)}")
+            conn.commit()
+        finally:
+            conn.close()
+        if not exists:
+            if self.legacy.exists():
+                rows = read_text_rows(self.legacy, self.fields)
+                print(f"  · {self.name}: importados {len(rows)} registros de {self.legacy.name}")
+            else:
+                rows = [dict(zip(self.fields, row)) for row in self.seed]
+            self.write(rows)
+
+    def read(self):
+        conn = mysql_connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"SELECT {', '.join('`%s`' % self.cols[f] for f in self.fields)} "
+                            f"FROM `{self.name}` ORDER BY `orden`")
+                return [{f: (v or "") for f, v in zip(self.fields, row)} for row in cur.fetchall()]
+        finally:
+            conn.close()
+
+    def write(self, rows):
+        """Reemplaza el contenido de la tabla en una sola transacción."""
+        names = [self.cols[f] for f in self.fields] + ["orden"]
+        sql = (f"INSERT INTO `{self.name}` ({', '.join('`%s`' % n for n in names)}) "
+               f"VALUES ({', '.join(['%s'] * len(names))})")
+        conn = mysql_connect()
+        try:
+            with conn.cursor() as cur:
+                cur.execute(f"DELETE FROM `{self.name}`")
+                if rows:
+                    cur.executemany(sql, [[row.get(f, "") for f in self.fields] + [i] for i, row in enumerate(rows)])
+            conn.commit()
+        except Exception:
+            conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+
+Table = MySQLTable if STORAGE == "mysql" else TextTable
+
+
+def wait_for_mysql(attempts=30):
+    """Al arrancar con Docker, MySQL puede tardar unos segundos en aceptar conexiones."""
+    for i in range(1, attempts + 1):
+        try:
+            mysql_connect().close()
+            return
+        except Exception as exc:  # noqa: BLE001 — cualquier fallo de conexión: reintentar
+            print(f"Esperando a MySQL en {MYSQL['host']}:{MYSQL['port']} ({i}/{attempts}): {exc}")
+            time.sleep(2)
+    sys.exit("No se pudo conectar con MySQL.")
+
+
 USERS = Table(
     "users.txt",
     ["usuario", "contraseña", "nombre", "rol", "estado", "registrado_por", "fecha_registro",
      # Ficha del adulto mayor (rol usuario); vacía para el resto de roles
-     "direccion", "telefono", "celular", "email", "tipo_sangre", "cliente"],
-    seed=[("admin", "admin", "Administrador", "admin", "activo", "", "")],
+     "direccion", "telefono", "celular", "email", "tipo_sangre", "cliente",
+     # Documento de identidad (familiar responsable y adulto mayor)
+     "tipo_documento", "documento",
+     # Último envío del catálogo de servicios al cliente: «fecha · canal»
+     "catalogo_enviado"],
+    seed=[("admin", ADMIN_PASSWORD, "Administrador", "admin", "activo", "", "")],
 )
 
+DOC_TYPES = {"CC": "Cédula de ciudadanía", "CE": "Cédula de extranjería",
+             "PA": "Pasaporte", "PPT": "Permiso por protección temporal"}
 BLOOD_TYPES = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
 PHONE_RE = re.compile(r"^[0-9+()\-\s]{7,20}$")
 EMAIL_RE = re.compile(r"^[^@\s;]+@[^@\s;]+\.[^@\s;]+$")
@@ -173,6 +312,23 @@ def migrate_caregivers():
     if changed:
         CAREGIVERS.write(rows)
 
+SERVICES = Table(
+    "services.txt",
+    ["id", "nombre", "descripcion", "precio", "activo"],
+    seed=[  # catálogo de ejemplo; el administrador lo edita en la pestaña «Catálogo»
+        ("s1", "Compañía y paseos", "Una persona de confianza acompaña al adulto mayor en casa o de paseo.", "", "si"),
+        ("s2", "Compras y recados", "Hacemos la compra del supermercado y la farmacia y la llevamos a casa.", "", "si"),
+        ("s3", "Ayuda con la tecnología", "Enseñamos a usar el celular, las videollamadas y las aplicaciones.", "", "si"),
+        ("s4", "Trámites y citas", "Acompañamiento a citas médicas, bancos y gestiones.", "", "si"),
+        ("s5", "App SilverAid", "Recordatorio de medicamentos, agenda de citas y botón de pánico con aviso a la familia.", "", "si"),
+    ],
+)
+
+
+def public_service(s):
+    return {"id": s["id"], "name": s["nombre"], "description": s["descripcion"], "price": s["precio"], "active": s["activo"] != "no"}
+
+
 SOS = Table(
     "sos.txt",
     ["id", "fecha", "usuario", "nombre", "motivo", "lat", "lng", "estado", "atendido_por", "fecha_atencion", "nota"],
@@ -196,7 +352,27 @@ def public_user(u):
     return {"username": u["usuario"], "name": u["nombre"], "role": u["rol"], "status": u["estado"],
             "registeredBy": u["registrado_por"], "registeredAt": u["fecha_registro"],
             "address": u.get("direccion", ""), "phone": u.get("telefono", ""), "mobile": u.get("celular", ""),
-            "email": u.get("email", ""), "bloodType": u.get("tipo_sangre", ""), "client": u.get("cliente", "")}
+            "email": u.get("email", ""), "bloodType": u.get("tipo_sangre", ""), "client": u.get("cliente", ""),
+            "docType": u.get("tipo_documento", ""), "document": u.get("documento", ""),
+            "hasPassword": bool(u.get("contraseña")), "catalogSent": u.get("catalogo_enviado", "")}
+
+
+def validate_document(doc_type, number, whose):
+    """Valida tipo y número de documento. Quita puntos y espacios (1.234.567 → 1234567). Devuelve (tipo, número, error)."""
+    doc_type = str(doc_type or "").upper()
+    number = re.sub(r"[.\s]", "", str(number or "")).upper()
+    if doc_type not in DOC_TYPES:
+        return None, None, f"Seleccione el tipo de documento {whose}."
+    if doc_type in ("CC", "CE"):
+        if not re.fullmatch(r"[0-9]{4,12}", number):
+            return None, None, f"El número de documento {whose} debe tener de 4 a 12 dígitos."
+    elif not re.fullmatch(r"[A-Z0-9]{4,20}", number):
+        return None, None, f"El número de documento {whose} debe tener de 4 a 20 letras o números."
+    return doc_type, number, None
+
+
+def document_owner(users, doc_type, number):
+    return next((u for u in users if u.get("tipo_documento") == doc_type and u.get("documento") == number), None)
 
 
 def validate_name(name):
@@ -279,6 +455,76 @@ def new_account(users, data, role, status, registered_by=""):
     return user, None
 
 
+def sign_up(data, role, registered_by=""):
+    """Alta de un familiar responsable (con su adulto mayor, pendiente de alta) o de un cuidador.
+    La usan el registro público y el administrador. Devuelve (cuenta, error)."""
+    # Familiar responsable y cuidador: dirección, celular y correo obligatorios.
+    extra = {"direccion": clean(data.get("address"), 120), "celular": clean(data.get("mobile"), 20),
+             "email": clean(data.get("email"), 80)}
+    if not extra["direccion"]:
+        return None, "Escriba su dirección."
+    if not PHONE_RE.match(extra["celular"]):
+        return None, "Escriba un número de celular válido (7 a 20 dígitos)."
+    if not EMAIL_RE.match(extra["email"]):
+        return None, "Escriba un correo electrónico válido."
+    elder = None
+    if role == "cliente":
+        # Documento del familiar responsable y datos del adulto mayor a su cargo.
+        doc_type, doc, error = validate_document(data.get("docType"), data.get("document"), "del familiar responsable")
+        if error:
+            return None, error
+        extra.update({"tipo_documento": doc_type, "documento": doc})
+        elder_name = str(data.get("elderName") or "").strip()
+        error = validate_name(elder_name) and "Escriba el nombre completo del usuario (adulto mayor)."
+        if error:
+            return None, error
+        e_type, e_doc, error = validate_document(data.get("elderDocType"), data.get("elderDocument"), "del usuario")
+        if error:
+            return None, error
+        if (e_type, e_doc) == (doc_type, doc):
+            return None, "El documento del usuario no puede ser el mismo que el del familiar responsable."
+        elder = {"nombre": elder_name[:80], "tipo_documento": e_type, "documento": e_doc,
+                 "direccion": clean(data.get("elderAddress"), 120), "celular": clean(data.get("elderMobile"), 20),
+                 "email": clean(data.get("elderEmail"), 80)}
+        if not elder["direccion"]:
+            return None, "Escriba la dirección del usuario (adulto mayor)."
+        if not PHONE_RE.match(elder["celular"]):
+            return None, "Escriba un celular válido para el usuario (7 a 20 dígitos)."
+        if elder["email"] and not EMAIL_RE.match(elder["email"]):
+            return None, "El correo electrónico del usuario no es válido."
+    with lock:
+        users = read_users()
+        error = None
+        if role == "cliente":
+            if document_owner(users, extra["tipo_documento"], extra["documento"]):
+                error = "Ya hay una cuenta registrada con su documento de identidad."
+            elif document_owner(users, elder["tipo_documento"], elder["documento"]):
+                error = "Ese adulto mayor ya está registrado en SilverAid."
+            else:
+                # El adulto mayor entra con su número de documento; la contraseña se la asigna el administrador.
+                elder["usuario"] = next((n for n in (elder["documento"].lower(),
+                                                     (elder["tipo_documento"] + elder["documento"]).lower())
+                                         if not find_user(users, n)), None)
+                if not elder["usuario"]:
+                    error = "Ese adulto mayor ya está registrado en SilverAid."
+                elif elder["usuario"] == str(data.get("username", "")).strip().lower():
+                    error = "Elija un nombre de usuario distinto al documento del adulto mayor."
+        user = None
+        if not error:
+            user, error = new_account(users, data, role, "activo", registered_by)
+        if user:
+            user.update(extra)
+            if elder:
+                row = {field: "" for field in USERS.fields}
+                row.update(elder, rol="usuario", estado="pendiente", registrado_por=user["usuario"],
+                           fecha_registro=now(), cliente=user["usuario"])
+                users.append(row)
+            USERS.write(users)
+    if error:
+        return None, error
+    return user, None
+
+
 def drop_sessions(username):
     for token, key in list(sessions.items()):
         if key == username.lower():
@@ -344,6 +590,13 @@ class Handler(SimpleHTTPRequestHandler):
             return None
         return user
 
+    def end_headers(self):
+        # Páginas, estilos y scripts: el navegador debe comprobar si cambiaron (si no, responde 304),
+        # para que nunca muestre una versión antigua después de actualizar SilverAid.
+        if not self.path.startswith("/api/"):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     # --- archivos estáticos
     def is_public(self, path):
         return path in PUBLIC_FILES or path.startswith(PUBLIC_DIRS)
@@ -386,6 +639,12 @@ class Handler(SimpleHTTPRequestHandler):
                     users = read_users()
                 self.send_json(HTTPStatus.OK, {"users": [public_user(u) for u in users]})
 
+        elif path == "/api/admin/services":
+            if self.auth("admin"):
+                with lock:
+                    rows = SERVICES.read()
+                self.send_json(HTTPStatus.OK, {"services": [public_service(s) for s in rows]})
+
         elif path == "/api/admin/caregivers":
             if self.auth("admin"):
                 with lock:
@@ -420,21 +679,7 @@ class Handler(SimpleHTTPRequestHandler):
             if role not in SELF_SIGNUP_ROLES:
                 return self.fail(HTTPStatus.BAD_REQUEST,
                                  "Elija «Familiar responsable» o «Cuidador/a». Las cuentas de adultos mayores las crea su familiar.")
-            # Familiar responsable y cuidador: dirección, celular y correo obligatorios.
-            extra = {"direccion": clean(data.get("address"), 120), "celular": clean(data.get("mobile"), 20),
-                     "email": clean(data.get("email"), 80)}
-            if not extra["direccion"]:
-                return self.fail(HTTPStatus.BAD_REQUEST, "Escriba su dirección.")
-            if not PHONE_RE.match(extra["celular"]):
-                return self.fail(HTTPStatus.BAD_REQUEST, "Escriba un número de celular válido (7 a 20 dígitos).")
-            if not EMAIL_RE.match(extra["email"]):
-                return self.fail(HTTPStatus.BAD_REQUEST, "Escriba un correo electrónico válido.")
-            with lock:
-                users = read_users()
-                user, error = new_account(users, data, role, "activo")
-                if user:
-                    user.update(extra)
-                    USERS.write(users)
+            user, error = sign_up(data, role)
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
             return self.send_json(HTTPStatus.CREATED, {"user": public_user(user)})
@@ -487,6 +732,38 @@ class Handler(SimpleHTTPRequestHandler):
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
             return self.send_json(HTTPStatus.CREATED, {"user": public_user(user)})
 
+        if path == "/api/admin/clients":
+            # El administrador crea un cliente con los mismos datos que el registro público.
+            admin = self.auth("admin")
+            if not admin:
+                return
+            user, error = sign_up(data, "cliente", admin["usuario"])
+            if error:
+                return self.fail(HTTPStatus.BAD_REQUEST, error)
+            return self.send_json(HTTPStatus.CREATED, {"user": public_user(user)})
+
+        m = re.fullmatch(r"/api/admin/users/([^/]+)/catalog", path)
+        if m:
+            # Se ha enviado el catálogo por WhatsApp o correo (desde el navegador del admin): se anota.
+            if not self.auth("admin"):
+                return
+            channel = {"whatsapp": "WhatsApp", "email": "correo"}.get(data.get("channel"))
+            if not channel:
+                return self.fail(HTTPStatus.BAD_REQUEST, "Canal no válido.")
+            with lock:
+                users = read_users()
+                user = find_user(users, m.group(1))
+                if not user or user["rol"] != "cliente":
+                    return self.fail(HTTPStatus.NOT_FOUND, "El cliente no existe.")
+                user["catalogo_enviado"] = f"{now()} · {channel}"
+                USERS.write(users)
+            return self.send_json(HTTPStatus.OK, {"user": public_user(user)})
+
+        if path == "/api/admin/services":
+            if not self.auth("admin"):
+                return
+            return self.save_service(data)
+
         m = re.fullmatch(r"/api/admin/users/([^/]+)/status", path)
         if m:
             admin = self.auth("admin")
@@ -502,6 +779,10 @@ class Handler(SimpleHTTPRequestHandler):
                 user = find_user(users, m.group(1))
                 if not user:
                     return self.fail(HTTPStatus.NOT_FOUND, "El usuario no existe.")
+                if status == "activo" and not user["contraseña"]:
+                    return self.fail(HTTPStatus.BAD_REQUEST,
+                                     f"{user['nombre']} todavía no tiene contraseña. Pulse «Editar» en Usuarios, "
+                                     "asígnele una y complete su ficha antes de darle de alta.")
                 user["estado"] = status
                 USERS.write(users)
             if status != "activo":
@@ -541,6 +822,12 @@ class Handler(SimpleHTTPRequestHandler):
             if not self.auth("admin"):
                 return
             return self.save_caregiver(data, m.group(1))
+
+        m = re.fullmatch(r"/api/admin/services/([^/]+)", path)
+        if m:
+            if not self.auth("admin"):
+                return
+            return self.save_service(data, m.group(1))
 
         m = re.fullmatch(r"/api/admin/users/([^/]+)", path)
         if m:
@@ -593,6 +880,19 @@ class Handler(SimpleHTTPRequestHandler):
             drop_sessions(target)
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
+        m = re.fullmatch(r"/api/admin/services/([^/]+)", path)
+        if m:
+            if not self.auth("admin"):
+                return
+            with lock:
+                rows = SERVICES.read()
+                service = next((s for s in rows if s["id"] == m.group(1)), None)
+                if not service:
+                    return self.fail(HTTPStatus.NOT_FOUND, "El servicio no existe.")
+                rows.remove(service)
+                SERVICES.write(rows)
+            return self.send_json(HTTPStatus.OK, {"ok": True})
+
         m = re.fullmatch(r"/api/admin/caregivers/([^/]+)", path)
         if m:
             if not self.auth("admin"):
@@ -621,7 +921,7 @@ class Handler(SimpleHTTPRequestHandler):
         password = str(data.get("password", ""))
         with lock:
             user = find_user(read_users(), username)
-        if not user or not secrets.compare_digest(user["contraseña"].encode(), password.encode()):
+        if not user or not user["contraseña"] or not secrets.compare_digest(user["contraseña"].encode(), password.encode()):
             return self.fail(HTTPStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos.")
         if user["estado"] == "pendiente":
             return self.fail(HTTPStatus.FORBIDDEN, "Su cuenta está pendiente de alta. El administrador de SilverAid la revisará pronto.")
@@ -630,6 +930,27 @@ class Handler(SimpleHTTPRequestHandler):
         token = secrets.token_urlsafe(32)
         sessions[token] = user["usuario"].lower()
         self.send_json(HTTPStatus.OK, {"token": token, "user": public_user(user)})
+
+    def save_service(self, data, service_id=None):
+        """Crea (service_id=None) o actualiza un servicio del catálogo."""
+        name = clean(data.get("name"), 80)
+        description = clean(data.get("description"), 400)
+        price = clean(data.get("price"), 40)
+        if not name:
+            return self.fail(HTTPStatus.BAD_REQUEST, "Escriba el nombre del servicio.")
+        with lock:
+            rows = SERVICES.read()
+            if service_id:
+                service = next((s for s in rows if s["id"] == service_id), None)
+                if not service:
+                    return self.fail(HTTPStatus.NOT_FOUND, "El servicio no existe.")
+            else:
+                service = {"id": "s" + secrets.token_hex(4)}
+                rows.append(service)
+            service.update({"nombre": name, "descripcion": description, "precio": price,
+                            "activo": "no" if data.get("active") is False else "si"})
+            SERVICES.write(rows)
+        return self.send_json(HTTPStatus.OK if service_id else HTTPStatus.CREATED, {"service": public_service(service)})
 
     def save_caregiver(self, data, cg_id=None):
         """Crea un cuidador (cg_id=None) o actualiza el existente con ese id."""
@@ -703,18 +1024,21 @@ class Handler(SimpleHTTPRequestHandler):
 
 
 def main():
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8000
+    if STORAGE == "mysql":
+        wait_for_mysql()
     with lock:
-        # Crea los archivos si no existen y actualiza el formato de users.txt de versiones anteriores.
+        # Crea los archivos o tablas si no existen y actualiza los datos de versiones anteriores.
+        for table in (USERS, CAREGIVERS, SOS, SERVICES):
+            table.setup()
         users = read_users()
         for u in users:  # adultos mayores registrados por un cliente antes de existir el campo «cliente»
             if u["rol"] == "usuario" and not u["cliente"] and u["registrado_por"]:
                 u["cliente"] = u["registrado_por"]
         USERS.write(users)
         migrate_caregivers()
-        SOS.read()
-    server = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"SilverAid en http://localhost:{port}   (datos en {DATA})")
+    server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
+    where = f"MySQL {MYSQL['user']}@{MYSQL['host']}:{MYSQL['port']}/{MYSQL['database']}" if STORAGE == "mysql" else DATA
+    print(f"SilverAid en http://{'localhost' if HOST in ('127.0.0.1', '0.0.0.0') else HOST}:{PORT}   (datos en {where})")
     print("Pulse Ctrl+C para detener.")
     try:
         server.serve_forever()

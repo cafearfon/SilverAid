@@ -23,3 +23,7 @@ __pycache__/
 
 # Usuarios del servidor local (contraseñas en texto plano)
 data/
+
+# Docker: secretos y datos de MySQL
+.env
+mysql-data/

@@ -12,7 +12,13 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
   <link rel="stylesheet" href="css/styles.css">
   <script src="js/auth.js"></script>
-  <script>if (!SAAuth.get()) location.replace('login.html');</script>
+  <script>
+    (function () {
+      const s = SAAuth.get();
+      if (!s) location.replace('login.html');
+      else if (s.role === 'usuario') location.replace('usuario.html'); // el adulto mayor tiene su propia página
+    })();
+  </script>
 </head>
 <body>
   <header class="topbar">

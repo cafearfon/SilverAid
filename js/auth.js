@@ -41,7 +41,7 @@
 
     /** Página de inicio según el rol. */
     home(role) {
-      return role === 'admin' ? 'admin.html' : 'app.html';
+      return role === 'admin' ? 'admin.html' : role === 'usuario' ? 'usuario.html' : 'app.html';
     },
 
     /** Roles de la aplicación (código guardado en users.txt → nombre visible). */

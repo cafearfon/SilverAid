@@ -3,13 +3,6 @@
   const DAYS = ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'];
   const SLOTS = [['manana', 'Mañana'], ['tarde', 'Tarde']];
 
-  SA.upcomingAppointments = () => {
-    const today = SA.dateKey();
-    return SA.state.appointments
-      .filter((a) => a.date >= today)
-      .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time));
-  };
-
   function render() {
     const s = SA.state;
     SA.renderFeed(document.getElementById('family-alerts'), s.alerts);

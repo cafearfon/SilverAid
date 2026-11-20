@@ -115,7 +115,7 @@
       render();
     });
 
-    document.getElementById('btn-sim-missed').addEventListener('click', () => {
+    document.getElementById('btn-sim-missed')?.addEventListener('click', () => {
       const d = SA.doses().find((x) => x.status === 'due' || x.status === 'pending');
       if (!d) return SA.toast('No quedan dosis pendientes hoy.', 'info');
       markMissed(d);

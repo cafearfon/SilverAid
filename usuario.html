@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SilverAid — Mi día</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css">
+  <script src="js/auth.js"></script>
+  <script>
+    // Página exclusiva del adulto mayor (rol «usuario»); el resto de roles va a su propia página.
+    (function () {
+      const s = SAAuth.get();
+      if (!s) location.replace('login.html');
+      else if (s.role !== 'usuario') location.replace(SAAuth.home(s.role));
+    })();
+  </script>
+</head>
+<body class="elder-page">
+  <header class="topbar">
+    <a class="brand" href="#home" aria-label="SilverAid, ir al inicio">
+      <img class="logo logo-color" src="assets/brand/silveraid-horizontal-color.svg" alt="SilverAid" width="187" height="48">
+      <img class="logo logo-negativo" src="assets/brand/silveraid-horizontal-negativo.svg" alt="SilverAid" width="187" height="48">
+    </a>
+    <div class="a11y">
+      <button id="btn-big" class="chip" aria-pressed="false">A+ Texto grande</button>
+      <button id="btn-contrast" class="chip" aria-pressed="false">◐ Alto contraste</button>
+      <span class="chip user-chip" id="user-chip"></span>
+      <button id="btn-logout" class="chip">Salir ⎋</button>
+    </div>
+  </header>
+
+  <nav class="tabs elder-tabs" id="tabs" aria-label="Secciones">
+    <button data-view="home" class="active">🏠 Inicio</button>
+    <button data-view="meds">💊 Mis dosis</button>
+    <button data-view="appts">📅 Mis citas</button>
+    <button data-view="sos" class="tab-sos">🆘 Ayuda</button>
+  </nav>
+
+  <main>
+    <!-- ============ INICIO ============ -->
+    <section id="view-home" class="view active">
+      <div class="hero">
+        <div>
+          <h1 id="greeting">Hola</h1>
+          <p id="today-date"></p>
+        </div>
+        <img class="hero-symbol" src="assets/brand/silveraid-simbolo-color.svg" alt="" width="112" height="112">
+      </div>
+      <div class="grid">
+        <article class="card"><h2>💊 Próxima dosis</h2><div id="home-next-dose"></div></article>
+        <article class="card"><h2>📅 Próxima cita</h2><div id="home-next-appt"></div></article>
+        <article class="card sos-card">
+          <h2>🆘 ¿Necesita ayuda?</h2>
+          <p>Avisa a su familia y a la central de SilverAid con su ubicación.</p>
+          <button class="btn danger big" data-action="sos">Pedir ayuda</button>
+        </article>
+      </div>
+    </section>
+
+    <!-- ============ DOSIS ============ -->
+    <section id="view-meds" class="view">
+      <h1>💊 Mis dosis de hoy</h1>
+      <p class="muted">Pulse «Ya la tomé» después de cada toma. Si una dosis pasa 30 minutos sin confirmarse, se avisa a su familia.</p>
+      <div class="row-actions">
+        <button class="btn ghost" id="btn-notify">🔔 Activar avisos en este teléfono</button>
+      </div>
+      <ul id="dose-list" class="dose-list"></ul>
+
+      <details class="card manage">
+        <summary>⚙️ Mis medicamentos</summary>
+        <ul id="med-list" class="list"></ul>
+        <form id="form-med" class="form compact">
+          <h2>Añadir medicamento</h2>
+          <label>Nombre <input name="name" required placeholder="Ej. Paracetamol"></label>
+          <label>Dosis <input name="dose" placeholder="Ej. 1 comprimido"></label>
+          <label>Horas (separadas por comas) <input name="times" required placeholder="08:00, 20:00"></label>
+          <button class="btn">Añadir</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- ============ CITAS ============ -->
+    <section id="view-appts" class="view">
+      <h1>📅 Mis citas</h1>
+      <p class="muted">Sus próximas citas médicas, de la más cercana a la más lejana.</p>
+      <ul id="appt-list" class="appt-list"></ul>
+
+      <details class="card manage">
+        <summary>➕ Añadir una cita</summary>
+        <form id="form-appt" class="form compact">
+          <label>Motivo <input name="title" required placeholder="Ej. Análisis de sangre"></label>
+          <div class="form-row">
+            <label>Fecha <input type="date" name="date" required></label>
+            <label>Hora <input type="time" name="time" required value="10:00"></label>
+          </div>
+          <label>Lugar <input name="place" placeholder="Ej. Centro de Salud"></label>
+          <label>Me acompaña <select name="who" id="appt-who"></select></label>
+          <button class="btn">Guardar cita</button>
+        </form>
+      </details>
+    </section>
+
+    <!-- ============ AYUDA / BOTÓN DE PÁNICO ============ -->
+    <section id="view-sos" class="view">
+      <h1>🆘 Pedir ayuda</h1>
+      <p>Pulse el botón rojo para avisar a su familia y a la central de SilverAid con su ubicación. Tendrá 5 segundos para cancelar.</p>
+      <div class="sos-wrap">
+        <button class="btn-sos" data-action="sos" aria-label="Pedir ayuda de emergencia">AYUDA</button>
+      </div>
+      <div class="grid two">
+        <article class="card">
+          <h2>📞 Se avisará a</h2>
+          <ul id="sos-contacts" class="list"></ul>
+        </article>
+        <article class="card">
+          <h2>📉 Detección de caídas</h2>
+          <label class="switch"><input type="checkbox" id="fall-toggle"> Activar con el sensor del teléfono</label>
+          <p class="muted" id="fall-status">Desactivada.</p>
+          <button class="btn ghost" id="btn-sim-fall">Probar: simular una caída</button>
+        </article>
+      </div>
+    </section>
+  </main>
+
+  <!-- Botón de ayuda siempre a mano (se oculta en la sección Ayuda) -->
+  <button class="sos-float" id="sos-float" data-action="sos" aria-label="Pedir ayuda de emergencia">🆘 AYUDA</button>
+
+  <!-- Ventana de cuenta atrás (SOS / caída) -->
+  <div id="overlay" class="overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="ov-title">
+    <div class="overlay-box">
+      <h2 id="ov-title"></h2>
+      <p id="ov-text"></p>
+      <div id="ov-count" class="ov-count"></div>
+      <div id="ov-actions" class="ov-actions"></div>
+    </div>
+  </div>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+
+  <script src="js/store.js"></script>
+  <script src="js/meds.js"></script>
+  <script src="js/sos.js"></script>
+  <script src="js/usuario.js"></script>
+</body>
+</html>
