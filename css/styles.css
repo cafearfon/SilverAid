@@ -271,7 +271,7 @@ code { font-size: .9em; background: var(--primary-soft); padding: .05em .35em; b
 .login-page { min-height: 100vh; background: var(--brand-cream); }
 .login-wrap {
   max-width: 440px; margin: 0 auto; padding: 2.5rem 1rem 3rem;
-  display: grid; justify-items: center; gap: 1.5rem;
+  display: grid; grid-template-columns: minmax(0, 1fr); justify-items: center; gap: 1.5rem;
 }
 .login-logo { width: 13rem; height: auto; display: block; }
 .login-logo-link { border-radius: 12px; }
@@ -286,41 +286,51 @@ code { font-size: .9em; background: var(--primary-soft); padding: .05em .35em; b
   margin: 0; padding: .6rem .8rem; border-radius: 8px; font-weight: 600;
   background: var(--danger-soft); color: var(--danger); border-left: 4px solid var(--danger);
 }
-.role-pick { border: none; padding: 0; margin: 0; display: grid; gap: .5rem; }
-.role-pick legend { font-weight: 600; font-size: .95rem; margin-bottom: .3rem; padding: 0; }
-.role-pick label {
-  display: flex; align-items: center; gap: .7rem; cursor: pointer; font-weight: 400;
-  border: 2px solid var(--border); border-radius: 12px; padding: .6rem .8rem; background: var(--surface);
+/* Crear cuenta: elección del tipo de cuenta (cada uno lleva a su página de registro) */
+.login-wrap:has(#panel-register:not([hidden])), .wizard-wrap { max-width: 620px; }
+.role-links { display: grid; gap: .7rem; margin: 1rem 0; }
+.role-link {
+  display: flex; gap: .9rem; align-items: flex-start; text-decoration: none; color: var(--text);
+  border: 2px solid var(--border); border-radius: 14px; padding: .9rem 1rem; background: var(--surface);
+  transition: border-color .15s, background .15s;
 }
-.role-pick label:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); }
-.role-pick input { width: 1.3rem; height: 1.3rem; min-height: 0; accent-color: var(--primary); flex: none; }
-.role-pick strong { display: block; font-weight: 700; }
-.role-pick small { color: var(--muted); font-size: .85rem; }
-.login-wrap:has(#panel-register:not([hidden])) { max-width: 580px; }
+.role-link:hover, .role-link:focus-visible { border-color: var(--primary); background: var(--primary-soft); }
+.role-link:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; }
+.role-link .role-emoji { font-size: 2rem; line-height: 1; }
+.role-link strong { display: block; font-size: 1.05rem; color: var(--primary); }
+.role-link small { display: block; color: var(--muted); font-size: .9rem; }
+.role-link .role-needs { margin-top: .35rem; font-size: .82rem; }
 .reg-panel { background: var(--surface); }
 .reg-panel legend { font-size: 1rem; }
 .elder-panel { border: 2px solid var(--accent); background: var(--primary-soft); }
 .elder-panel input, .elder-panel select { background: var(--surface); }
-/* Registro: datos del familiar y del adulto mayor como desplegables (uno abierto a la vez) */
-.reg-details { border-radius: 12px; }
-.reg-details:not(.elder-panel) { border: 1px solid var(--border); }
-.reg-details > summary {
-  list-style: none; cursor: pointer; min-height: 48px; padding: .7rem 1rem;
-  display: flex; flex-wrap: wrap; align-items: center; gap: .4rem .7rem; font-weight: 700; color: var(--primary);
+/* Registro por pasos (registro-*.html) */
+.steps { list-style: none; margin: 0 0 .4rem; padding: 0; display: flex; gap: .3rem; counter-reset: none; }
+.steps li { flex: 1; display: grid; justify-items: center; gap: .25rem; text-align: center; color: var(--muted); font-size: .8rem; font-weight: 600; position: relative; }
+.steps li::before { content: ""; position: absolute; top: 1rem; left: -50%; width: 100%; height: 3px; background: var(--border); z-index: 0; }
+.steps li:first-child::before { display: none; }
+.steps li.done::before, .steps li.current::before { background: var(--primary); }
+.step-num {
+  position: relative; z-index: 1; width: 2rem; height: 2rem; border-radius: 50%; display: grid; place-items: center;
+  background: var(--surface); border: 3px solid var(--border); color: var(--muted); font-weight: 700;
 }
-.reg-details > summary::-webkit-details-marker { display: none; }
-.reg-details > summary::after { content: "▾"; margin-left: auto; font-size: 1.2rem; transition: transform .2s; }
-.reg-details[open] > summary::after { transform: rotate(180deg); }
-.reg-details > summary:focus-visible { outline: 3px solid var(--primary); outline-offset: 2px; border-radius: 10px; }
-.reg-sum-state {
-  font-size: .8rem; font-weight: 600; padding: .15rem .6rem; border-radius: 999px;
-  background: var(--danger-soft); color: var(--danger);
+.steps li.done .step-num { background: var(--primary); border-color: var(--primary); color: var(--primary-ink); }
+.steps li.current .step-num { border-color: var(--primary); color: var(--primary); }
+.steps li.current { color: var(--primary); }
+.step { display: grid; gap: .8rem; min-width: 0; }
+.wizard-nav { display: flex; justify-content: space-between; gap: .7rem; flex-wrap: wrap; }
+.wizard-nav [data-next] { margin-left: auto; }
+.info-box { padding: .7rem .9rem; border-radius: 10px; background: var(--primary-soft); border-left: 4px solid var(--accent); font-size: .92rem; }
+.info-box strong { display: block; }
+@media (max-width: 480px) { .step-name { display: none; } .steps li.current .step-name { display: block; } }
+.step-group { display: grid; gap: .8rem; min-width: 0; }
+.form .check-field {
+  display: flex; align-items: flex-start; gap: .6rem; cursor: pointer; font-weight: 500;
+  border: 2px solid var(--border); border-radius: 12px; padding: .7rem .9rem; background: var(--surface);
 }
-.reg-sum-state.done { background: var(--ok-soft); color: var(--ok); }
-.reg-body { border: none; margin: 0; padding: 0 1rem 1rem; display: grid; gap: .7rem; min-width: 0; }
-/* Registro del colaborador: escolaridad, pase de conducción y seguridad social */
-.collab-fields { display: grid; gap: .7rem; padding-top: .7rem; border-top: 1px dashed var(--border); }
-.collab-fields-inner { display: grid; gap: .7rem; }
+.check-field:has(input:checked) { border-color: var(--primary); background: var(--primary-soft); }
+.check-field input { width: 1.3rem; height: 1.3rem; min-height: 0; margin: .15rem 0 0; flex: none; accent-color: var(--primary); }
+.check-field small { display: block; font-weight: 400; }
 .collab-sub { display: grid; gap: .7rem; padding-left: .8rem; border-left: 3px solid var(--primary-soft); }
 .choice-group { border: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: .4rem .6rem; min-width: 0; }
 .choice-group legend { font-weight: 600; font-size: .95rem; padding: 0; margin-bottom: .3rem; }
@@ -379,6 +389,7 @@ table.data tr.row-editing td:first-child { box-shadow: inset 4px 0 0 var(--accen
 .pill.activo, .pill.atendida { background: var(--ok-soft); color: var(--ok); }
 .pill.pendiente { background: var(--danger-soft); color: var(--danger); }
 .pill.inactivo { background: var(--border); color: var(--muted); }
+.pill.verificacion { background: var(--warn-soft); color: var(--warn); }
 .attend-form { display: flex; flex-wrap: wrap; gap: .4rem; min-width: 240px; }
 .attend-form input { flex: 1 1 160px; min-height: 36px; padding: .3rem .5rem; }
 .live::before { content: "●"; color: var(--ok); margin-right: .3rem; }
@@ -490,3 +501,28 @@ body.contrast .sos-float { border-color: #fff; }
   .hero-symbol { width: 4rem; }
   .msg { max-width: 92%; }
 }
+
+/* Mis documentos (documentos.html): cuidador y colaborador */
+.docs-page { max-width: 760px; display: grid; gap: 1rem; }
+.docs-page h1 { margin-bottom: 0; }
+.docs-page .card h2 { margin-top: 0; }
+.status-banner { padding: .9rem 1rem; border-radius: 12px; border-left: 5px solid var(--accent); background: var(--primary-soft); }
+.status-banner strong { display: block; margin-bottom: .15rem; }
+.status-banner.warn { border-left-color: var(--warn); background: var(--warn-soft); }
+.status-banner.ok { border-left-color: var(--ok); background: var(--ok-soft); }
+.status-banner:empty { display: none; }
+.doc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: .5rem; }
+.doc-item {
+  display: flex; align-items: center; gap: .8rem; flex-wrap: wrap;
+  padding: .7rem .8rem; border: 1px solid var(--border); border-radius: 12px; background: var(--surface);
+}
+.doc-item.missing { border-color: var(--warn); }
+.doc-state { width: 1.8rem; height: 1.8rem; border-radius: 50%; display: grid; place-items: center; font-weight: 700; flex: none; }
+.doc-item.done .doc-state { background: var(--ok-soft); color: var(--ok); }
+.doc-item.missing .doc-state { background: var(--warn-soft); color: var(--warn); }
+.doc-info { flex: 1; min-width: 12rem; }
+.doc-info strong { display: block; }
+.doc-info .sub { display: block; color: var(--muted); font-size: .88rem; overflow-wrap: anywhere; }
+.file-btn { cursor: pointer; position: relative; }
+.file-btn:focus-within { outline: 3px solid var(--primary); outline-offset: 2px; }
+.file-btn.disabled { opacity: .55; cursor: not-allowed; }

@@ -26,7 +26,8 @@ Otras variables: HOST (127.0.0.1), PORT (8000), DATA_DIR (./data),
 
 Roles:   usuario (adulto mayor), cliente (familiar responsable), cuidador, colaborador
          (acompañamiento a trámites y citas, medicamentos, conductor…), admin.
-Estados: activo, pendiente (esperando alta del administrador), inactivo.
+Estados: activo, pendiente (esperando alta del administrador), inactivo y verificacion (cuidador o colaborador
+         recién registrado: puede entrar solo para subir sus documentos hasta que el administrador lo active).
 
 Uso:  python server.py [puerto]
 """
@@ -61,7 +62,8 @@ if STORAGE not in ("txt", "mysql"):
     sys.exit(f"STORAGE debe ser «txt» o «mysql» (se recibió «{STORAGE}»).")
 
 # Solo se sirven estos archivos y carpetas (nunca data/, server.py ni .git/).
-PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "/usuario.html", "/favicon.ico"}
+PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "/usuario.html", "/favicon.ico",
+                "/registro-familiar.html", "/registro-cuidador.html", "/registro-colaborador.html", "/documentos.html"}
 PUBLIC_DIRS = ("/css/", "/js/", "/assets/")
 
 ROLES = ("usuario", "cliente", "cuidador", "colaborador", "admin")
@@ -71,7 +73,7 @@ SELF_SIGNUP_ROLES = ("cliente", "cuidador", "colaborador")
 # Rol que entrega su documento de identidad al registrarse.
 DOCUMENT_ROLES = ("cliente", "colaborador")
 LEGACY_ROLES = {"user": "usuario"}
-STATUSES = ("activo", "pendiente", "inactivo")
+STATUSES = ("activo", "pendiente", "inactivo", "verificacion")
 SKILLS = ("compania", "compras", "tecnologia", "tramites")
 DAYS = ("lun", "mar", "mie", "jue", "vie", "sab", "dom")
 HOURS = range(6, 22)  # franjas de 1 h, de 06:00 a 22:00
@@ -311,6 +313,10 @@ ATTACHMENT_KINDS = {
     "titulos": ("titlesFiles", "adjunto_titulos", 300, "su título"),  # lista: un PDF por título
     "rethus": ("rethusFile", "adjunto_rethus", 300, "el certificado del RETHUS"),
 }
+# Nombre corto de cada documento (avisos al administrador y al propio usuario).
+KIND_LABELS = {"documento": "Documento de identidad", "pase": "Pase de conducción", "salud": "Certificado de salud",
+               "pension": "Certificado de pensión", "arl": "Certificado de ARL", "rut": "RUT",
+               "rethus": "Certificado del RETHUS"}
 MAX_TITLES = 5  # títulos que puede adjuntar un cuidador (clases «titulos-1» … «titulos-5»)
 # Roles que adjuntan PDF al registrarse.
 ATTACHMENT_ROLES = ("colaborador", "cuidador")
@@ -397,7 +403,22 @@ def public_user(u):
             "licenseVehicle": u.get("pase_vehiculo", ""),
             "licenseCategories": [c for c in u.get("pase_categorias", "").split(",") if c],
             "socialSecurity": u.get("seguridad_social", ""),
-            "attachments": user_attachments(u)}
+            "attachments": user_attachments(u), "requiredDocuments": required_kinds(u),
+            "missingDocuments": missing_kinds(u)}
+
+
+def required_kinds(u):
+    """Documentos obligatorios según el rol y las respuestas de la ficha (los títulos son opcionales)."""
+    if u.get("rol") == "cuidador" and u.get("escolaridad"):  # registrado desde «Crear cuenta»
+        return ["rut", "salud", "pension", "arl", "rethus"]
+    if u.get("rol") == "colaborador":
+        return (["documento"] + (["pase"] if u.get("pase_conduccion") == "si" else [])
+                + (["salud", "pension", "arl"] if u.get("seguridad_social") == "si" else []))
+    return []
+
+
+def missing_kinds(u):
+    return [k for k in required_kinds(u) if not u.get(ATTACHMENT_KINDS[k][1])]
 
 
 def user_attachments(u):
@@ -519,10 +540,13 @@ def caregiver_profile(data):
 
 
 def attach_files(data, fields, kinds):
-    """Valida los PDF obligatorios de esas clases y anota su nombre en `fields`."""
+    """Valida los PDF enviados de esas clases y anota su nombre en `fields`. Al registrarse ninguno es obligatorio:
+    los que falten se suben después desde documentos.html (la cuenta queda en verificación)."""
     files = {}
     for kind in kinds:
         key, column, _, _ = ATTACHMENT_KINDS[kind]
+        if not data.get(key):
+            continue
         files[kind], error = decode_pdf(data.get(key), kind)
         if error:
             return None, None, error
@@ -624,6 +648,10 @@ def sign_up(data, role, registered_by=""):
         extra.update(profile)
     if role == "cliente":
         # Datos del adulto mayor a cargo del familiar responsable.
+        if data.get("selfElder"):
+            # El familiar responsable es también el adulto mayor: su ficha usa sus propios datos.
+            data = {**data, "elderName": data.get("name"), "elderDocType": doc_type, "elderDocument": doc,
+                    "elderAddress": extra["direccion"], "elderMobile": extra["celular"], "elderEmail": extra["email"]}
         elder_name = str(data.get("elderName") or "").strip()
         error = validate_name(elder_name) and "Escriba el nombre completo del usuario (adulto mayor)."
         if error:
@@ -631,7 +659,7 @@ def sign_up(data, role, registered_by=""):
         e_type, e_doc, error = validate_document(data.get("elderDocType"), data.get("elderDocument"), "del usuario")
         if error:
             return None, error
-        if (e_type, e_doc) == (doc_type, doc):
+        if (e_type, e_doc) == (doc_type, doc) and not data.get("selfElder"):
             return None, "El documento del usuario no puede ser el mismo que el del familiar responsable."
         elder = {"nombre": elder_name[:80], "tipo_documento": e_type, "documento": e_doc,
                  "direccion": clean(data.get("elderAddress"), 120), "celular": clean(data.get("elderMobile"), 20),
@@ -653,17 +681,24 @@ def sign_up(data, role, registered_by=""):
             if document_owner(users, elder["tipo_documento"], elder["documento"]):
                 error = "Ese adulto mayor ya está registrado en SilverAid."
             else:
-                # El adulto mayor entra con su número de documento; la contraseña se la asigna el administrador.
-                elder["usuario"] = next((n for n in (elder["documento"].lower(),
-                                                     (elder["tipo_documento"] + elder["documento"]).lower())
-                                         if not find_user(users, n)), None)
-                if not elder["usuario"]:
+                # El adulto mayor entra con su número de documento; la contraseña se la asigna el administrador
+                # (si es el mismo familiar responsable, usa la misma contraseña de su cuenta).
+                own = str(data.get("username", "")).strip().lower()
+                names = (elder["documento"].lower(), (elder["tipo_documento"] + elder["documento"]).lower())
+                elder["usuario"] = next((n for n in names if n != own and not find_user(users, n)), None)
+                if own in names:
+                    error = ("Como adulto mayor entrará con su número de documento: elija otro nombre de usuario."
+                             if data.get("selfElder") else
+                             "Elija un nombre de usuario distinto al documento del adulto mayor.")
+                elif not elder["usuario"]:
                     error = "Ese adulto mayor ya está registrado en SilverAid."
-                elif elder["usuario"] == str(data.get("username", "")).strip().lower():
-                    error = "Elija un nombre de usuario distinto al documento del adulto mayor."
+                elif data.get("selfElder"):
+                    elder["contraseña"] = str(data.get("password", ""))
         user = None
         if not error:
-            user, error = new_account(users, data, role, "activo", registered_by)
+            # Cuidador y colaborador quedan en verificación hasta que el administrador revise sus documentos.
+            user, error = new_account(users, data, role, "verificacion" if role in ATTACHMENT_ROLES else "activo",
+                                      registered_by)
         if user:
             user.update(extra)
             if elder:
@@ -731,14 +766,15 @@ class Handler(SimpleHTTPRequestHandler):
         auth = self.headers.get("Authorization", "")
         return auth[7:] if auth.startswith("Bearer ") else ""
 
-    def auth(self, role=None):
-        """Usuario activo de la sesión. Si no hay sesión o no tiene el rol, responde el error y devuelve None."""
+    def auth(self, role=None, verifying=False):
+        """Usuario activo de la sesión (con verifying=True vale también una cuenta en verificación).
+        Si no hay sesión o no tiene el rol, responde el error y devuelve None."""
         key = sessions.get(self.token())
         user = None
         if key:
             with lock:
                 user = find_user(read_users(), key)
-        if not user or user["estado"] != "activo":
+        if not user or user["estado"] not in (("activo", "verificacion") if verifying else ("activo",)):
             self.fail(HTTPStatus.UNAUTHORIZED, "Sesión no válida.")
             return None
         if role and user["rol"] != role:
@@ -771,7 +807,7 @@ class Handler(SimpleHTTPRequestHandler):
             return super().do_GET()
 
         if path == "/api/me":
-            user = self.auth()
+            user = self.auth(verifying=True)
             if user:
                 self.send_json(HTTPStatus.OK, {"user": public_user(user)})
 
@@ -830,12 +866,15 @@ class Handler(SimpleHTTPRequestHandler):
     def do_POST(self):
         path = self.clean_path()
         # El registro de colaboradores y cuidadores trae sus PDF (cuidador: hasta 5 + 5 × 300 KB, en base64).
-        data = self.read_json(4_500_000 if path == "/api/register" else 20_000)
+        data = self.read_json(4_500_000 if path == "/api/register" else 600_000 if path == "/api/me/documents" else 20_000)
         if data is None:
             return self.fail(HTTPStatus.BAD_REQUEST, "Petición no válida o demasiado grande.")
 
         if path == "/api/login":
             return self.login(data)
+
+        if path == "/api/me/documents":
+            return self.upload_document(data)
 
         if path == "/api/logout":
             sessions.pop(self.token(), None)
@@ -947,6 +986,11 @@ class Handler(SimpleHTTPRequestHandler):
                 user = find_user(users, m.group(1))
                 if not user:
                     return self.fail(HTTPStatus.NOT_FOUND, "El usuario no existe.")
+                missing = missing_kinds(user) if status == "activo" else []
+                if missing:
+                    return self.fail(HTTPStatus.BAD_REQUEST,
+                                     f"No se puede activar a {user['nombre']}: faltan documentos ("
+                                     + ", ".join(KIND_LABELS[k] for k in missing) + ").")
                 if status == "activo" and not user["contraseña"]:
                     return self.fail(HTTPStatus.BAD_REQUEST,
                                      f"{user['nombre']} todavía no tiene contraseña. Pulse «Editar» en Usuarios, "
@@ -1030,6 +1074,9 @@ class Handler(SimpleHTTPRequestHandler):
     # --- DELETE
     def do_DELETE(self):
         path = self.clean_path()
+        m = re.fullmatch(r"/api/me/documents/titulos-([0-9]+)", path)
+        if m:
+            return self.delete_title(int(m.group(1)))
         m = re.fullmatch(r"/api/admin/users/([^/]+)", path)
         if m:
             admin = self.auth("admin")
@@ -1096,11 +1143,68 @@ class Handler(SimpleHTTPRequestHandler):
             return self.fail(HTTPStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos.")
         if user["estado"] == "pendiente":
             return self.fail(HTTPStatus.FORBIDDEN, "Su cuenta está pendiente de alta. El administrador de SilverAid la revisará pronto.")
-        if user["estado"] != "activo":
+        if user["estado"] not in ("activo", "verificacion"):
             return self.fail(HTTPStatus.FORBIDDEN, "Su cuenta está desactivada. Contacte con el administrador.")
         token = secrets.token_urlsafe(32)
         sessions[token] = user["usuario"].lower()
         self.send_json(HTTPStatus.OK, {"token": token, "user": public_user(user)})
+
+    def upload_document(self, data):
+        """El cuidador o colaborador sube (o reemplaza) uno de sus documentos, o añade un título."""
+        user = self.auth(verifying=True)
+        if not user:
+            return
+        if user["rol"] not in ATTACHMENT_ROLES:
+            return self.fail(HTTPStatus.FORBIDDEN, "Su cuenta no necesita documentos.")
+        kind = data.get("kind")
+        allowed = required_kinds(user) + (["titulos"] if user["rol"] == "cuidador" else [])
+        if kind not in allowed:
+            return self.fail(HTTPStatus.BAD_REQUEST, "Ese documento no corresponde a su cuenta.")
+        doc, error = decode_pdf(data.get("file"), kind)
+        if error:
+            return self.fail(HTTPStatus.BAD_REQUEST, error)
+        key = user["usuario"].lower()
+        with lock:
+            users = read_users()
+            user = find_user(users, key)
+            rows = ATTACHMENTS.read()
+            if kind == "titulos":
+                titles = [t for t in (user.get("adjunto_titulos") or "").split("|") if t]
+                if len(titles) >= MAX_TITLES:
+                    return self.fail(HTTPStatus.BAD_REQUEST, f"Puede adjuntar como máximo {MAX_TITLES} títulos.")
+                kind = f"titulos-{len(titles) + 1}"
+                user["adjunto_titulos"] = "|".join(titles + [doc["nombre_archivo"]])
+            else:
+                user[ATTACHMENT_KINDS[kind][1]] = doc["nombre_archivo"]
+            rows = [a for a in rows if a["id"] != f"{key}:{kind}"]
+            rows.append({**doc, "clase": kind, "id": f"{key}:{kind}", "usuario": user["usuario"]})
+            ATTACHMENTS.write(rows)
+            USERS.write(users)
+        self.send_json(HTTPStatus.OK, {"user": public_user(user)})
+
+    def delete_title(self, n):
+        """Quita el título n del cuidador y renumera los siguientes."""
+        user = self.auth(verifying=True)
+        if not user:
+            return
+        key = user["usuario"].lower()
+        with lock:
+            users = read_users()
+            user = find_user(users, key)
+            titles = [t for t in (user.get("adjunto_titulos") or "").split("|") if t]
+            if not 1 <= n <= len(titles):
+                return self.fail(HTTPStatus.NOT_FOUND, "Ese título no existe.")
+            rows = ATTACHMENTS.read()
+            mine = {a["clase"]: a for a in rows if a["usuario"].lower() == key and a["clase"].startswith("titulos-")}
+            rows = [a for a in rows if a not in mine.values()]
+            kept = [mine.get(f"titulos-{i}") for i in range(1, len(titles) + 1) if i != n]
+            for i, row in enumerate([r for r in kept if r], 1):
+                rows.append({**row, "clase": f"titulos-{i}", "id": f"{key}:titulos-{i}"})
+            del titles[n - 1]
+            user["adjunto_titulos"] = "|".join(titles)
+            ATTACHMENTS.write(rows)
+            USERS.write(users)
+        self.send_json(HTTPStatus.OK, {"user": public_user(user)})
 
     def save_service(self, data, service_id=None):
         """Crea (service_id=None) o actualiza un servicio del catálogo."""

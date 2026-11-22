@@ -32,7 +32,9 @@ Usuario administrador por defecto: **admin / admin**.
 | Página | Para qué |
 |--------|----------|
 | `index.html` | Landing page pública: presentación, funciones, roles, cómo funciona y seguridad. Funciona también en GitHub Pages. |
-| `login.html` | Inicio de sesión y registro (`login.html#registro`, `#registro-cliente`, `#registro-cuidador`, `#registro-colaborador` abren el registro con el rol elegido). |
+| `login.html` | Inicio de sesión y «Crear cuenta», donde se elige el tipo de cuenta (`login.html#registro`). Los enlaces antiguos `#registro-cliente`, `#registro-cuidador` y `#registro-colaborador` redirigen a la página de registro de ese rol. |
+| `registro-familiar.html`, `registro-cuidador.html`, `registro-colaborador.html` | Registro por pasos de cada rol, con barra de progreso; cada paso se valida antes de avanzar. Lógica común en `js/registro.js`. |
+| `documentos.html` | «Mis documentos» del cuidador y del colaborador: lista de documentos obligatorios (✔/✖), subir o reemplazar cada PDF y, el cuidador, agregar o quitar títulos. |
 | `app.html` | La aplicación (requiere sesión). |
 | `admin.html` | Administración (solo admin). |
 
@@ -50,8 +52,13 @@ Usuario administrador por defecto: **admin / admin**.
   | `colaborador` | Colaborador/a: acompañamiento a trámites y citas, solicitar y llevar medicamentos, conductor, entre otros |
   | `admin` | Administrador |
 
-- Desde «Crear una cuenta» se registran **familiares responsables** (*cliente*: nombre y apellidos, dirección, celular, correo electrónico, usuario y contraseña) y **cuidadores** (*cuidador*: nombre y apellidos, dirección, celular, correo electrónico, nivel de escolaridad, sus títulos (opcional; un PDF por título, hasta 5, con el botón «➕ Agregar título»), del RUT ante la DIAN, de los certificados de afiliación a salud, pensión y ARL como independiente y del certificado del RETHUS —máx. 300 KB cada uno—, usuario y contraseña) y **colaboradores** (*colaborador*: nombre y apellidos, documento de identidad con su PDF escaneado (máx. 300 KB), dirección, celular, correo electrónico, grado de escolaridad, pase de conducción —carro, moto o ambos, con su categoría A1–C3 y el PDF del pase (máx. 300 KB)—, afiliación a seguridad social como independiente con los PDF de los certificados de afiliación a salud, pensión y ARL (máx. 300 KB cada uno), usuario y contraseña). Los **adultos mayores** (*usuario*) los registra su familiar desde la aplicación (quedan pendientes de alta) o el administrador. Nunca se crean *admin* desde el registro.
-- Estados de cuenta: `activo`, `pendiente` (esperando alta) e `inactivo`.
+- Desde «Crear una cuenta» se elige el tipo de cuenta y se pasa al registro por pasos de ese rol:
+  - **Familiar responsable** (*cliente*), 3 pasos: sus datos (nombre, documento, dirección, celular, correo), los del adulto mayor y el acceso. Su cuenta queda activa; la del adulto mayor, pendiente de alta.
+  - **Cuidador/a** (*cuidador*), 4 pasos: datos personales; formación (nivel de escolaridad y hasta 5 títulos en PDF, opcionales); documentos (RUT ante la DIAN, certificados de afiliación a salud, pensión y ARL como independiente y certificado del RETHUS); acceso.
+  - **Colaborador/a** (*colaborador*), 4 pasos: datos personales con documento de identidad; perfil (escolaridad, pase de conducción —carro, moto o ambos, con su categoría A1–C3— y afiliación a seguridad social como independiente); documentos (documento de identidad y, según las respuestas, pase y certificados de salud, pensión y ARL); acceso.
+  - Todos los documentos son PDF de máximo 300 KB, revisados en el navegador y en el servidor. **Al registrarse son opcionales**: cuidador y colaborador quedan **en verificación**, pueden entrar solo a «Mis documentos» (`documentos.html`) para subir los que falten, y el administrador los activa cuando están completos (el servidor no deja activar a nadie con documentos obligatorios pendientes).
+  - Los **adultos mayores** (*usuario*) los registra su familiar o el administrador. Nunca se crean *admin* desde el registro.
+- Estados de cuenta: `activo`, `pendiente` (esperando alta), `inactivo` y `verificacion` (cuidador o colaborador registrado que aún no ha sido activado).
 
 ## Página de administración (`admin.html`)
 
@@ -62,8 +69,8 @@ Solo para el rol `admin` (al iniciar sesión como admin se abre directamente):
 | 👥 **Usuarios** | Adultos mayores (rol `usuario`), con filtro por estado y acciones **✏️ Editar**, **Inactivar**/Activar y Eliminar. El botón **➕ Crear usuario** despliega el formulario: nombre completo, dirección, teléfono, celular, correo (opcional), tipo de sangre, **cliente asociado** (debe existir antes) y usuario/contraseña de acceso. Es la pestaña que se abre por defecto. |
 | 👨‍👩‍👧 **Clientes** | Familiares responsables con los adultos mayores que han registrado y su estado; permite dar de alta a esos familiares y activar/desactivar al cliente. |
 | 🧑‍⚕️ **Cuidadores** | Lista de cuidadores registrados con botones **✏️ Editar** (abre el formulario con sus datos; si tiene cuenta se puede cambiar la contraseña, si no, crearla) y **Eliminar**. Debajo, el botón **➕ Registrar cuidador** que despliega el formulario: información personal, perfil, cuenta opcional (rol `cuidador`) y **disponibilidad semanal** en una matriz (días en columnas, una hora por fila de 06:00 a 22:00; clic o arrastre para marcar). La aplicación solo asigna un cuidador si está disponible ese día y hora. |
-| 🧑‍⚕️ **Cuidadores** (cuentas) | Debajo de las fichas, los cuidadores que se registraron desde «Crear cuenta», con escolaridad, botones **📄** para abrir sus PDF (RUT, salud, pensión, ARL, RETHUS y cada título) e **Inactivar**/Activar. |
-| 🤝 **Colaboradores** | Colaboradores registrados: documento, contacto, escolaridad, pase de conducción, afiliación a seguridad social, con botones **📄** para abrir los PDF adjuntos (documento, pase y certificados de salud, pensión y ARL) y **Inactivar**/Activar. |
+| 🧑‍⚕️ **Cuidadores** (cuentas) | Debajo de las fichas, los cuidadores que se registraron desde «Crear cuenta», con escolaridad, botones **📄** para abrir sus PDF (RUT, salud, pensión, ARL, RETHUS y cada título), los documentos que faltan y **✔ Verificar y activar** (solo con todos los obligatorios) o Inactivar. La pestaña muestra cuántos esperan verificación. |
+| 🤝 **Colaboradores** | Colaboradores registrados: documento, contacto, escolaridad, pase de conducción, afiliación a seguridad social, con botones **📄** para abrir los PDF adjuntos (documento, pase y certificados de salud, pensión y ARL), los documentos que faltan y **✔ Verificar y activar** (solo con todos los obligatorios) o Inactivar. La pestaña muestra cuántos esperan verificación. |
 | ⏳ **Altas pendientes** | Adultos mayores que un cliente (familiar) registró desde la sección *Familia*. No pueden entrar hasta que el admin les da de alta (o rechaza la solicitud). |
 | 🚨 **Llamadas SOS** | Registro de cada pulsación del botón de pánico (y de caídas sin respuesta): fecha, persona, motivo y ubicación. Se actualiza cada 10 s, suena un aviso con cada llamada nueva (en cualquier pestaña) y se marcan como atendidas con una nota. |
 

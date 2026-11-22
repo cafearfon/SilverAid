@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SilverAid — Registro de cuidador/a</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css?v=9">
+</head>
+<body class="login-page">
+  <main class="login-wrap wizard-wrap">
+    <a href="index.html" class="login-logo-link" aria-label="SilverAid, volver a la página de inicio">
+      <img class="login-logo" src="assets/brand/silveraid-vertical-color.svg" alt="SilverAid" width="200" height="116">
+    </a>
+
+    <section class="card login-card">
+      <h1>🧑‍⚕️ Registro de cuidador/a</h1>
+      <p class="muted small-text">Ofrece cuidados y acompañamiento a personas mayores. Su cuenta quedará <strong>en verificación</strong> hasta que SilverAid revise sus documentos.</p>
+      <form id="reg-form" class="form wizard" novalidate>
+        <ol class="steps" id="steps" aria-hidden="true"></ol>
+        <p class="sr-only" id="step-label" aria-live="polite"></p>
+
+        <section class="step" data-title="Datos personales">
+          <label>Nombre y apellidos * <input name="name" autocomplete="name" required maxlength="80" placeholder="Ej. Marta Rodríguez Pérez"></label>
+          <label>Dirección * <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
+          <div class="form-row">
+            <label>Celular * <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
+            <label>Correo electrónico * <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. marta@correo.com"></label>
+          </div>
+        </section>
+
+        <section class="step" data-title="Formación" hidden>
+          <label>Nivel de escolaridad *
+            <select name="education" required>
+              <option value="">Seleccione…</option>
+              <option value="ninguno">Ninguno</option>
+              <option value="primaria">Primaria</option>
+              <option value="bachillerato">Bachillerato</option>
+              <option value="tecnico">Técnico</option>
+              <option value="tecnologo">Tecnólogo</option>
+              <option value="universitario">Universitario</option>
+              <option value="posgrado">Posgrado</option>
+            </select>
+          </label>
+          <fieldset class="titles-field">
+            <legend>Títulos obtenidos (opcional)</legend>
+            <p class="small-text muted">Un PDF por título (diploma o acta de grado), de máximo 300 KB cada uno. Hasta 5 títulos. También puede subirlos después.</p>
+            <div class="titles-list" id="titles-list"></div>
+            <button type="button" class="btn ghost small" id="btn-add-title">➕ Agregar título</button>
+          </fieldset>
+        </section>
+
+        <section class="step" data-title="Documentos" hidden>
+          <div class="info-box">
+            <strong>📎 Puede adjuntarlos ahora o después.</strong>
+            Si no los tiene a mano, cree la cuenta y súbalos más tarde desde «Mis documentos». Cada documento en PDF de máximo 300 KB.
+          </div>
+          <label class="file-field">RUT ante la DIAN
+            <input name="rutFile" type="file" accept="application/pdf,.pdf">
+          </label>
+          <p class="small-text"><strong>Afiliación a seguridad social como independiente</strong></p>
+          <label class="file-field">Certificado de afiliación a salud
+            <input name="certificate" type="file" accept="application/pdf,.pdf">
+          </label>
+          <label class="file-field">Certificado de afiliación a pensión
+            <input name="pensionFile" type="file" accept="application/pdf,.pdf">
+          </label>
+          <label class="file-field">Certificado de afiliación a la ARL
+            <input name="arlFile" type="file" accept="application/pdf,.pdf">
+          </label>
+          <label class="file-field">Certificado de inscripción en el RETHUS
+            <input name="rethusFile" type="file" accept="application/pdf,.pdf">
+            <small class="muted">Registro Único Nacional del Talento Humano en Salud.</small>
+          </label>
+        </section>
+
+        <section class="step" data-title="Acceso" hidden>
+          <label>Usuario * <input name="username" autocomplete="username" required placeholder="Letras y números, sin espacios"></label>
+          <label>Contraseña *
+            <span class="pw-field">
+              <input name="password" type="password" autocomplete="new-password" required>
+              <button type="button" class="btn ghost small pw-toggle" aria-label="Mostrar contraseña">Ver</button>
+            </span>
+          </label>
+          <label>Repita la contraseña * <input name="password2" type="password" autocomplete="new-password" required></label>
+        </section>
+
+        <p class="form-error" role="alert" hidden></p>
+        <div class="wizard-nav">
+          <button type="button" class="btn ghost" data-prev hidden>← Atrás</button>
+          <button class="btn big" data-next>Siguiente →</button>
+        </div>
+      </form>
+      <p class="login-switch"><a href="login.html#registro">← Elegir otro tipo de cuenta</a> · ¿Ya tiene cuenta? <a href="login.html">Iniciar sesión</a></p>
+    </section>
+  </main>
+
+  <script src="js/auth.js?v=9"></script>
+  <script src="js/registro.js?v=9"></script>
+  <script>
+    (function () {
+      const f = document.getElementById('reg-form').elements;
+      const { PHONE, EMAIL, fileProblem, pdfPayload } = SAReg;
+      const titles = SAReg.titleList(document.getElementById('titles-list'), document.getElementById('btn-add-title'));
+      const DOCS = [
+        ['rutFile', 'su RUT'], ['certificate', 'el certificado de afiliación a salud'],
+        ['pensionFile', 'el certificado de afiliación a pensión'], ['arlFile', 'el certificado de afiliación a la ARL'],
+        ['rethusFile', 'el certificado del RETHUS'],
+      ];
+
+      SAReg.init({
+        role: 'cuidador',
+        steps: [
+          () => {
+            if (!f.name.value.trim()) return { field: 'name', msg: 'Escriba su nombre y apellidos.' };
+            if (!f.address.value.trim()) return { field: 'address', msg: 'Escriba su dirección.' };
+            if (!PHONE.test(f.mobile.value.trim())) return { field: 'mobile', msg: 'Escriba un número de celular válido.' };
+            if (!EMAIL.test(f.email.value.trim())) return { field: 'email', msg: 'Escriba un correo electrónico válido.' };
+            return null;
+          },
+          () => {
+            if (!f.education.value) return { field: 'education', msg: 'Seleccione su nivel de escolaridad.' };
+            return titles.problem();
+          },
+          () => {
+            for (const [name, what] of DOCS) {
+              const msg = fileProblem(f[name].files[0], what);
+              if (msg) return { field: name, msg };
+            }
+            return null;
+          },
+        ],
+        async body() {
+          const data = {
+            name: f.name.value.trim(), address: f.address.value.trim(), mobile: f.mobile.value.trim(), email: f.email.value.trim(),
+            education: f.education.value, titlesFiles: [],
+          };
+          for (const t of titles.chosen()) data.titlesFiles.push(await pdfPayload(t.file));
+          for (const [name] of DOCS) if (f[name].files[0]) data[name] = await pdfPayload(f[name].files[0]);
+          return data;
+        },
+      });
+    })();
+  </script>
+</body>
+</html>

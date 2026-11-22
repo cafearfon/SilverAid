@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SilverAid — Registro de familiar responsable</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css?v=9">
+</head>
+<body class="login-page">
+  <main class="login-wrap wizard-wrap">
+    <a href="index.html" class="login-logo-link" aria-label="SilverAid, volver a la página de inicio">
+      <img class="login-logo" src="assets/brand/silveraid-vertical-color.svg" alt="SilverAid" width="200" height="116">
+    </a>
+
+    <section class="card login-card">
+      <h1>👨‍👩‍👧 Registro de familiar responsable</h1>
+      <p class="muted small-text">Cree su cuenta y registre a la persona mayor a su cargo. Su cuenta queda activa al momento; la del adulto mayor, pendiente hasta que SilverAid la revise.</p>
+      <form id="reg-form" class="form wizard" novalidate>
+        <ol class="steps" id="steps" aria-hidden="true"></ol>
+        <p class="sr-only" id="step-label" aria-live="polite"></p>
+
+        <section class="step" data-title="Sus datos">
+          <label>Nombre y apellidos * <input name="name" autocomplete="name" required maxlength="80" placeholder="Ej. Laura Gómez Ruiz"></label>
+          <div class="form-row">
+            <label>Tipo de documento *
+              <select name="docType" required>
+                <option value="">Seleccione…</option>
+                <option value="CC">Cédula de ciudadanía</option>
+                <option value="CE">Cédula de extranjería</option>
+                <option value="PA">Pasaporte</option>
+                <option value="PPT">Permiso por protección temporal</option>
+              </select>
+            </label>
+            <label>Número de documento * <input name="document" inputmode="numeric" required maxlength="20" placeholder="Ej. 1052345678"></label>
+          </div>
+          <label>Dirección * <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
+          <div class="form-row">
+            <label>Celular * <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
+            <label>Correo electrónico * <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. laura@correo.com"></label>
+          </div>
+        </section>
+
+        <section class="step" data-title="Adulto mayor" hidden>
+          <label class="check-field"><input type="checkbox" name="selfElder"> <span><strong>¿Usted es el adulto mayor?</strong>
+            <small class="muted">Márquelo si se registra a sí mismo: tendrá su cuenta de familiar responsable y también la de adulto mayor.</small></span></label>
+          <div class="info-box" id="self-elder-note" hidden>
+            Usaremos sus datos del paso anterior. Como adulto mayor entrará con su <b>número de documento</b> y la <b>misma contraseña</b>, cuando SilverAid revise y active esa cuenta.
+          </div>
+          <div class="step-group" id="elder-fields">
+          <p class="small-text muted">La persona mayor a su cargo. Entrará con su número de documento; la contraseña se la asigna el administrador al darle de alta.</p>
+          <label>Nombre completo * <input name="elderName" required maxlength="80" placeholder="Ej. Carmen Ruiz de Gómez"></label>
+          <div class="form-row">
+            <label>Tipo de documento *
+              <select name="elderDocType" required>
+                <option value="">Seleccione…</option>
+                <option value="CC">Cédula de ciudadanía</option>
+                <option value="CE">Cédula de extranjería</option>
+                <option value="PA">Pasaporte</option>
+                <option value="PPT">Permiso por protección temporal</option>
+              </select>
+            </label>
+            <label>Número de documento * <input name="elderDocument" inputmode="numeric" required maxlength="20" placeholder="Ej. 23456789"></label>
+          </div>
+          <label>Dirección * <input name="elderAddress" required maxlength="120" placeholder="Ej. Carrera 9 # 20-15, Tunja"></label>
+          <div class="form-row">
+            <label>Celular * <input name="elderMobile" type="tel" required maxlength="20" placeholder="Ej. 310 765 4321"></label>
+            <label>Correo electrónico (opcional) <input name="elderEmail" type="email" maxlength="80" placeholder="Ej. carmen@correo.com"></label>
+          </div>
+          </div>
+          <label>Tipo de sangre *
+            <select name="elderBloodType" required>
+              <option value="">Seleccione…</option>
+              <option>O+</option><option>O-</option><option>A+</option><option>A-</option>
+              <option>B+</option><option>B-</option><option>AB+</option><option>AB-</option>
+            </select>
+          </label>
+        </section>
+
+        <section class="step" data-title="Acceso" hidden>
+          <label>Usuario * <input name="username" autocomplete="username" required placeholder="Letras y números, sin espacios"></label>
+          <label>Contraseña *
+            <span class="pw-field">
+              <input name="password" type="password" autocomplete="new-password" required>
+              <button type="button" class="btn ghost small pw-toggle" aria-label="Mostrar contraseña">Ver</button>
+            </span>
+          </label>
+          <label>Repita la contraseña * <input name="password2" type="password" autocomplete="new-password" required></label>
+        </section>
+
+        <p class="form-error" role="alert" hidden></p>
+        <div class="wizard-nav">
+          <button type="button" class="btn ghost" data-prev hidden>← Atrás</button>
+          <button class="btn big" data-next>Siguiente →</button>
+        </div>
+      </form>
+      <p class="login-switch"><a href="login.html#registro">← Elegir otro tipo de cuenta</a> · ¿Ya tiene cuenta? <a href="login.html">Iniciar sesión</a></p>
+    </section>
+  </main>
+
+  <script src="js/auth.js?v=9"></script>
+  <script src="js/registro.js?v=9"></script>
+  <script>
+    (function () {
+      const f = document.getElementById('reg-form').elements;
+      const { PHONE, EMAIL, docOk } = SAReg;
+      const v = (name) => f[name].value.trim();
+      const self = () => f.selfElder.checked;
+
+      // Si el familiar es el adulto mayor, solo falta el tipo de sangre.
+      f.selfElder.addEventListener('change', () => {
+        document.getElementById('elder-fields').hidden = self();
+        document.getElementById('self-elder-note').hidden = !self();
+      });
+
+      SAReg.init({
+        role: 'cliente',
+        steps: [
+          () => {
+            if (!v('name')) return { field: 'name', msg: 'Escriba su nombre y apellidos.' };
+            if (!f.docType.value) return { field: 'docType', msg: 'Seleccione su tipo de documento.' };
+            if (!docOk(f.docType.value, f.document.value)) return { field: 'document', msg: 'Revise su número de documento.' };
+            if (!v('address')) return { field: 'address', msg: 'Escriba su dirección.' };
+            if (!PHONE.test(v('mobile'))) return { field: 'mobile', msg: 'Escriba un número de celular válido.' };
+            if (!EMAIL.test(v('email'))) return { field: 'email', msg: 'Escriba un correo electrónico válido.' };
+            return null;
+          },
+          () => {
+            if (self()) return f.elderBloodType.value ? null : { field: 'elderBloodType', msg: 'Seleccione su tipo de sangre.' };
+            if (!v('elderName')) return { field: 'elderName', msg: 'Escriba el nombre completo del adulto mayor.' };
+            if (!f.elderDocType.value) return { field: 'elderDocType', msg: 'Seleccione el tipo de documento del adulto mayor.' };
+            if (!docOk(f.elderDocType.value, f.elderDocument.value)) return { field: 'elderDocument', msg: 'Revise el número de documento del adulto mayor.' };
+            if (!v('elderAddress')) return { field: 'elderAddress', msg: 'Escriba la dirección del adulto mayor.' };
+            if (!PHONE.test(v('elderMobile'))) return { field: 'elderMobile', msg: 'Escriba un celular válido para el adulto mayor.' };
+            if (!f.elderBloodType.value) return { field: 'elderBloodType', msg: 'Seleccione el tipo de sangre del adulto mayor.' };
+            if (v('elderEmail') && !EMAIL.test(v('elderEmail'))) return { field: 'elderEmail', msg: 'El correo electrónico del adulto mayor no es válido.' };
+            return null;
+          },
+        ],
+        async body() {
+          const own = { name: v('name'), docType: f.docType.value, document: v('document'), address: v('address'), mobile: v('mobile'), email: v('email') };
+          if (self()) return { ...own, selfElder: true, elderBloodType: f.elderBloodType.value };
+          return {
+            ...own,
+            elderName: v('elderName'), elderDocType: f.elderDocType.value, elderDocument: v('elderDocument'),
+            elderAddress: v('elderAddress'), elderMobile: v('elderMobile'), elderEmail: v('elderEmail'), elderBloodType: f.elderBloodType.value,
+          };
+        },
+      });
+    })();
+  </script>
+</body>
+</html>

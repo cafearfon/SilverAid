@@ -7,7 +7,15 @@
   const api = SAAuth.api;
   const ROLE = SAAuth.ROLES;
   const SKILLS = { compania: 'Compañía', compras: 'Compras', tecnologia: 'Tecnología', tramites: 'Trámites' };
-  const STATUS = { activo: 'Activo', pendiente: 'Pendiente de alta', inactivo: 'Inactivo' };
+  const STATUS = { activo: 'Activo', pendiente: 'Pendiente de alta', inactivo: 'Inactivo', verificacion: 'En verificación' };
+  const DOC_LABELS = { documento: 'Documento de identidad', pase: 'Pase', salud: 'Salud', pension: 'Pensión', arl: 'ARL', rut: 'RUT', rethus: 'RETHUS' };
+  /** Documentos obligatorios que le faltan a un cuidador o colaborador (debajo del estado). */
+  const missingText = (u) => (u.missingDocuments?.length
+    ? `<span class="sub warn-text">Faltan: ${u.missingDocuments.map((k) => DOC_LABELS[k] || k).join(', ')}</span>` : '');
+  /** «Activar» de cuidadores y colaboradores: solo con todos los documentos obligatorios. */
+  const activateBtn = (u) => (u.missingDocuments?.length
+    ? `<button class="btn ok small" disabled title="Faltan documentos obligatorios">Activar</button>`
+    : `<button class="btn ok small" data-status="activo" data-user="${esc(u.username)}">${u.status === 'verificacion' ? '✔ Verificar y activar' : 'Activar'}</button>`);
   const EDUCATION = { ninguno: 'Ninguno', primaria: 'Primaria', bachillerato: 'Bachillerato', tecnico: 'Técnico',
     tecnologo: 'Tecnólogo', universitario: 'Universitario', posgrado: 'Posgrado' };
   const VEHICLE = { carro: '🚗 Carro', moto: '🏍️ Moto', ambos: '🚗 Carro y 🏍️ moto' };
@@ -150,6 +158,7 @@
   /** Cuidadores registrados desde «Crear cuenta»: escolaridad y PDF (RUT, seguridad social, RETHUS y cada título). */
   function renderCaregiverSignups() {
     const list = users.filter((u) => u.role === 'cuidador');
+    setCount('count-cg-verif', list.filter((u) => u.status === 'verificacion').length);
     $('cg-signup-body').innerHTML = list.length
       ? list.map((c) => `
         <tr>
@@ -159,10 +168,10 @@
           <td><div class="attach-btns">${[['rut', 'RUT'], ['salud', 'Salud'], ['pension', 'Pensión'], ['arl', 'ARL'], ['rethus', 'RETHUS'],
               ...Object.keys(c.attachments || {}).filter((k) => k.startsWith('titulos-')).map((k) => [k, 'Título ' + k.split('-')[1]])]
             .map(([kind, label]) => attachBtn(c, kind, label)).join('') || '<span class="muted">Ninguno</span>'}</div></td>
-          <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span></td>
+          <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span>${missingText(c)}</td>
           <td class="actions">${c.status === 'activo'
             ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(c.username)}">Inactivar</button>`
-            : `<button class="btn ok small" data-status="activo" data-user="${esc(c.username)}">Activar</button>`}</td>
+            : activateBtn(c)}</td>
         </tr>`).join('')
       : '<tr><td colspan="6" class="empty">Ningún cuidador se ha registrado desde «Crear cuenta».</td></tr>';
   }
@@ -170,6 +179,7 @@
   /** Colaboradores: formación, pase de conducción y afiliación a seguridad social. */
   function renderCollaborators() {
     const list = users.filter((u) => u.role === 'colaborador');
+    setCount('count-collab-verif', list.filter((u) => u.status === 'verificacion').length);
     $('collab-body').innerHTML = list.length
       ? list.map((c) => `
         <tr>
@@ -186,10 +196,10 @@
               (attachBtn(c, 'salud', 'Salud') + attachBtn(c, 'pension', 'Pensión') + attachBtn(c, 'arl', 'ARL'))
               || '<span class="sub">Sin certificados adjuntos</span>'}</div>`
             : c.socialSecurity === 'no' ? 'No afiliado' : '<span class="muted">—</span>'}</td>
-          <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span></td>
+          <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span>${missingText(c)}</td>
           <td class="actions">${c.status === 'activo'
             ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(c.username)}">Inactivar</button>`
-            : `<button class="btn ok small" data-status="activo" data-user="${esc(c.username)}">Activar</button>`}</td>
+            : activateBtn(c)}</td>
         </tr>`).join('')
       : '<tr><td colspan="7" class="empty">Todavía no hay colaboradores registrados.</td></tr>';
   }

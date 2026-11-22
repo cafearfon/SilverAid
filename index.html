@@ -11,8 +11,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=7">
-  <link rel="stylesheet" href="css/landing.css?v=7">
+  <link rel="stylesheet" href="css/styles.css?v=9">
+  <link rel="stylesheet" href="css/landing.css?v=9">
 </head>
 <body class="landing">
   <a class="skip-link" href="#contenido">Saltar al contenido</a>
@@ -130,7 +130,7 @@
       <div class="lp-wrap">
         <header class="lp-section-head">
           <p class="eyebrow">Para quién</p>
-          <h2>Una aplicación, tres formas de cuidar</h2>
+          <h2>Una aplicación, cuatro formas de cuidar</h2>
         </header>
         <div class="lp-roles">
           <article class="role-card">
@@ -143,13 +143,19 @@
             <span class="role-emoji">👨‍👩‍👧</span>
             <h3>Familiares responsables</h3>
             <p>Registre a su familiar, reciba avisos al instante y coordine las visitas con el resto de la familia.</p>
-            <a class="btn" href="login.html#registro-cliente">Registrar a mi familiar</a>
+            <a class="btn" href="registro-familiar.html">Registrar a mi familiar</a>
           </article>
           <article class="role-card">
             <span class="role-emoji">🧑‍⚕️</span>
             <h3>Cuidadores</h3>
             <p>Ofrezca compañía y cuidados en su barrio, con un horario que se ajusta a su disponibilidad.</p>
-            <a class="btn ghost" href="login.html#registro-cuidador">Quiero ser cuidador/a</a>
+            <a class="btn ghost" href="registro-cuidador.html">Quiero ser cuidador/a</a>
+          </article>
+          <article class="role-card">
+            <span class="role-emoji">🤝</span>
+            <h3>Colaboradores</h3>
+            <p>Acompañe a trámites y citas médicas, recoja y lleve medicamentos o sea el conductor de una persona mayor.</p>
+            <a class="btn ghost" href="registro-colaborador.html">Quiero ser colaborador/a</a>
           </article>
         </div>
       </div>
@@ -227,14 +233,14 @@
     </div>
   </footer>
 
-  <script src="js/auth.js?v=7"></script>
+  <script src="js/auth.js?v=9"></script>
   <script>
     // Si ya hay sesión iniciada, la cabecera ofrece volver a la aplicación.
     (function () {
       const s = SAAuth.get();
       if (!s) return;
       document.getElementById('lp-actions').innerHTML =
-        `<a class="btn" href="${SAAuth.home(s.role)}">Ir a la aplicación →</a>`;
+        `<a class="btn" href="${SAAuth.home(s.role, s.status)}">Ir a la aplicación →</a>`;
     })();
   </script>
 </body>

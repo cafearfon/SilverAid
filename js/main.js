@@ -55,7 +55,9 @@
     $('user-chip').textContent = `👤 ${SA.session.name} · ${SAAuth.ROLES[SA.session.role] || SA.session.role}`;
     $('admin-link').hidden = !SA.isAdmin();
     $('btn-logout').addEventListener('click', () => SAAuth.logout());
-    SAAuth.api('/api/me').catch(() => { SAAuth.clear(); location.replace('login.html'); });
+    SAAuth.api('/api/me').then(({ user }) => {
+      if (user.status === 'verificacion') { SAAuth.set({ ...SAAuth.get(), status: user.status }); location.replace('documentos.html'); }
+    }).catch(() => { SAAuth.clear(); location.replace('login.html'); });
 
     $('tabs').addEventListener('click', (e) => { const v = e.target.closest('button')?.dataset.view; if (v) SA.showView(v); });
     window.addEventListener('hashchange', () => SA.showView(location.hash.slice(1)));

@@ -39,8 +39,9 @@
       location.replace('login.html');
     },
 
-    /** Página de inicio según el rol. */
-    home(role) {
+    /** Página de inicio según el rol. Una cuenta en verificación solo puede subir sus documentos. */
+    home(role, status) {
+      if (status === 'verificacion') return 'documentos.html';
       return role === 'admin' ? 'admin.html' : role === 'usuario' ? 'usuario.html' : 'app.html';
     },
 

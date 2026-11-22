@@ -10,7 +10,15 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=7">
+  <link rel="stylesheet" href="css/styles.css?v=9">
+  <script>
+    // Enlaces antiguos (login.html#registro-cuidador…) → la página de registro de ese rol.
+    (function () {
+      const pages = { cliente: 'registro-familiar.html', cuidador: 'registro-cuidador.html', colaborador: 'registro-colaborador.html' };
+      const m = location.hash.match(/^#registro-(cliente|cuidador|colaborador)$/);
+      if (m) location.replace(pages[m[1]]);
+    })();
+  </script>
 </head>
 <body class="login-page">
   <main class="login-wrap">
@@ -36,376 +44,45 @@
 
     <section class="card login-card" id="panel-register" hidden>
       <h1>Crear cuenta</h1>
-      <form id="form-register" class="form" novalidate>
-        <fieldset class="role-pick">
-          <legend>Soy…</legend>
-          <label><input type="radio" name="role" value="cliente" checked> <span><strong>👨‍👩‍👧 Familiar responsable</strong><small>Cuido de un familiar mayor</small></span></label>
-          <label><input type="radio" name="role" value="cuidador"> <span><strong>🧑‍⚕️ Cuidador/a</strong><small>Ofrezco cuidados y acompañamiento</small></span></label>
-          <label><input type="radio" name="role" value="colaborador"> <span><strong>🤝 Colaborador/a</strong><small>Acompaño a trámites y citas, llevo medicamentos, conduzco…</small></span></label>
-        </fieldset>
-        <p class="small-text muted">¿Es usted un adulto mayor? Su familiar responsable crea su cuenta desde SilverAid.</p>
-        <details class="reg-panel reg-details" id="self-panel" name="reg-datos" open>
-          <summary>
-            <span class="reg-sum-title" id="self-title">👨‍👩‍👧 Datos del familiar responsable</span>
-            <span class="reg-sum-state"></span>
-          </summary>
-          <fieldset class="reg-body">
-          <legend class="sr-only" id="self-legend">Datos del familiar responsable</legend>
-          <label>Nombre y apellidos * <input name="name" autocomplete="name" required maxlength="80" placeholder="Ej. Laura Gómez Ruiz"></label>
-          <div class="form-row" id="self-doc">
-            <label>Tipo de documento *
-              <select name="docType" required>
-                <option value="">Seleccione…</option>
-                <option value="CC">Cédula de ciudadanía</option>
-                <option value="CE">Cédula de extranjería</option>
-                <option value="PA">Pasaporte</option>
-                <option value="PPT">Permiso por protección temporal</option>
-              </select>
-            </label>
-            <label>Número de documento * <input name="document" inputmode="numeric" required maxlength="20" placeholder="Ej. 1052345678"></label>
-          </div>
-          <label class="file-field" id="doc-file" hidden>Documento de identidad escaneado (PDF, máx. 300 KB) *
-            <input name="documentFile" type="file" accept="application/pdf,.pdf" required>
-            <small class="muted">Las dos caras del documento en un solo PDF.</small>
-          </label>
-          <label>Dirección * <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
-          <label>Celular * <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
-          <label>Correo electrónico * <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. laura@correo.com"></label>
-
-          <!-- Colaborador y cuidador: escolaridad y documentos. Cada bloque dice para qué rol es. -->
-          <div class="collab-fields" id="pro-fields" hidden>
-            <label>Nivel de escolaridad *
-              <select name="education" required>
-                <option value="">Seleccione…</option>
-                <option value="ninguno">Ninguno</option>
-                <option value="primaria">Primaria</option>
-                <option value="bachillerato">Bachillerato</option>
-                <option value="tecnico">Técnico</option>
-                <option value="tecnologo">Tecnólogo</option>
-                <option value="universitario">Universitario</option>
-                <option value="posgrado">Posgrado</option>
-              </select>
-            </label>
-            <fieldset class="titles-field" data-roles="cuidador">
-              <legend>Títulos obtenidos (opcional)</legend>
-              <p class="small-text muted">Un PDF por título (diploma o acta de grado), de máximo 300 KB cada uno. Hasta 5 títulos.</p>
-              <div class="titles-list" id="titles-list"></div>
-              <button type="button" class="btn ghost small" id="btn-add-title">➕ Agregar título</button>
-            </fieldset>
-
-            <div class="collab-fields-inner" data-roles="colaborador">
-              <fieldset class="choice-group">
-                <legend>¿Tiene pase de conducción? *</legend>
-                <label><input type="radio" name="license" value="si"> Sí</label>
-                <label><input type="radio" name="license" value="no"> No</label>
-              </fieldset>
-              <div class="collab-sub" id="license-fields" hidden>
-                <fieldset class="choice-group">
-                  <legend>¿Para qué vehículo? *</legend>
-                  <label><input type="radio" name="licenseVehicle" value="carro"> 🚗 Carro</label>
-                  <label><input type="radio" name="licenseVehicle" value="moto"> 🏍️ Moto</label>
-                  <label><input type="radio" name="licenseVehicle" value="ambos"> Carro y moto</label>
-                </fieldset>
-                <fieldset class="choice-group" id="license-cats" hidden>
-                  <legend>Categoría del pase *</legend>
-                  <label data-for="moto"><input type="checkbox" name="licenseCat" value="A1"> A1</label>
-                  <label data-for="moto"><input type="checkbox" name="licenseCat" value="A2"> A2</label>
-                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="B1"> B1</label>
-                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="B2"> B2</label>
-                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="B3"> B3</label>
-                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="C1"> C1</label>
-                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="C2"> C2</label>
-                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="C3"> C3</label>
-                </fieldset>
-                <label class="file-field">Pase de conducción escaneado (PDF, máx. 300 KB) *
-                  <input name="licenseFile" type="file" accept="application/pdf,.pdf" required>
-                </label>
-              </div>
-
-              <fieldset class="choice-group">
-                <legend>¿Está afiliado a seguridad social como independiente? *</legend>
-                <label><input type="radio" name="socialSecurity" value="si"> Sí</label>
-                <label><input type="radio" name="socialSecurity" value="no"> No</label>
-              </fieldset>
-            </div>
-
-            <label class="file-field" data-roles="cuidador">RUT ante la DIAN (PDF, máx. 300 KB) *
-              <input name="rutFile" type="file" accept="application/pdf,.pdf" required>
-            </label>
-
-            <div class="collab-sub" id="ss-fields" hidden>
-              <p class="small-text" data-roles="cuidador"><strong>Afiliación a seguridad social como independiente</strong></p>
-              <label class="file-field">Certificado de afiliación a salud (PDF, máx. 300 KB) *
-                <input name="certificate" type="file" accept="application/pdf,.pdf" required>
-              </label>
-              <label class="file-field">Certificado de afiliación a pensión (PDF, máx. 300 KB) *
-                <input name="pensionFile" type="file" accept="application/pdf,.pdf" required>
-              </label>
-              <label class="file-field">Certificado de afiliación a la ARL (PDF, máx. 300 KB) *
-                <input name="arlFile" type="file" accept="application/pdf,.pdf" required>
-              </label>
-            </div>
-
-            <label class="file-field" data-roles="cuidador">Certificado de inscripción en el RETHUS (PDF, máx. 300 KB) *
-              <input name="rethusFile" type="file" accept="application/pdf,.pdf" required>
-              <small class="muted">Registro Único Nacional del Talento Humano en Salud.</small>
-            </label>
-          </div>
-          </fieldset>
-        </details>
-
-        <details class="reg-panel reg-details elder-panel" id="elder-panel" name="reg-datos">
-          <summary>
-            <span class="reg-sum-title">👵 Datos del usuario (adulto mayor)</span>
-            <span class="reg-sum-state"></span>
-          </summary>
-          <fieldset class="reg-body">
-          <legend class="sr-only">Datos del usuario (adulto mayor)</legend>
-          <p class="small-text muted">La persona mayor a su cargo. Su cuenta quedará pendiente hasta que el administrador de SilverAid la revise y le dé de alta.</p>
-          <label>Nombre completo * <input name="elderName" required maxlength="80" placeholder="Ej. Carmen Ruiz de Gómez"></label>
-          <div class="form-row">
-            <label>Tipo de documento *
-              <select name="elderDocType" required>
-                <option value="">Seleccione…</option>
-                <option value="CC">Cédula de ciudadanía</option>
-                <option value="CE">Cédula de extranjería</option>
-                <option value="PA">Pasaporte</option>
-                <option value="PPT">Permiso por protección temporal</option>
-              </select>
-            </label>
-            <label>Número de documento * <input name="elderDocument" inputmode="numeric" required maxlength="20" placeholder="Ej. 23456789"></label>
-          </div>
-          <label>Dirección * <input name="elderAddress" required maxlength="120" placeholder="Ej. Carrera 9 # 20-15, Tunja"></label>
-          <label>Celular * <input name="elderMobile" type="tel" required maxlength="20" placeholder="Ej. 310 765 4321"></label>
-          <label>Tipo de sangre *
-            <select name="elderBloodType" required>
-              <option value="">Seleccione…</option>
-              <option>O+</option><option>O-</option><option>A+</option><option>A-</option>
-              <option>B+</option><option>B-</option><option>AB+</option><option>AB-</option>
-            </select>
-          </label>
-          <label>Correo electrónico (opcional) <input name="elderEmail" type="email" maxlength="80" placeholder="Ej. carmen@correo.com"></label>
-          </fieldset>
-        </details>
-
-        <fieldset class="form-section reg-panel">
-          <legend>🔐 Su acceso a SilverAid</legend>
-          <label>Usuario * <input name="username" autocomplete="username" required placeholder="Letras y números, sin espacios"></label>
-          <label>Contraseña *
-            <span class="pw-field">
-              <input name="password" type="password" autocomplete="new-password" required>
-              <button type="button" class="btn ghost small pw-toggle" aria-label="Mostrar contraseña">Ver</button>
-            </span>
-          </label>
-          <label>Repita la contraseña * <input name="password2" type="password" autocomplete="new-password" required></label>
-        </fieldset>
-        <p class="form-error" role="alert" hidden></p>
-        <button class="btn big">Crear cuenta y entrar</button>
-      </form>
+      <p class="muted">¿Qué tipo de cuenta necesita?</p>
+      <nav class="role-links" aria-label="Tipo de cuenta">
+        <a class="role-link" href="registro-familiar.html">
+          <span class="role-emoji" aria-hidden="true">👨‍👩‍👧</span>
+          <span><strong>Familiar responsable</strong><small>Cuido de un familiar mayor y quiero registrarlo en SilverAid.</small>
+            <small class="role-needs">Necesitará sus datos y documento, y los del adulto mayor. 3 pasos.</small></span>
+        </a>
+        <a class="role-link" href="registro-cuidador.html">
+          <span class="role-emoji" aria-hidden="true">🧑‍⚕️</span>
+          <span><strong>Cuidador/a</strong><small>Ofrezco cuidados y acompañamiento a personas mayores.</small>
+            <small class="role-needs">Tenga a mano en PDF: RUT, certificados de salud, pensión, ARL y RETHUS, y sus títulos. Puede subirlos después. 4 pasos.</small></span>
+        </a>
+        <a class="role-link" href="registro-colaborador.html">
+          <span class="role-emoji" aria-hidden="true">🤝</span>
+          <span><strong>Colaborador/a</strong><small>Acompaño a trámites y citas, llevo medicamentos, conduzco…</small>
+            <small class="role-needs">Tenga a mano en PDF: documento de identidad y, si aplica, pase de conducción y certificados de salud, pensión y ARL. Puede subirlos después. 4 pasos.</small></span>
+        </a>
+      </nav>
+      <p class="small-text muted">¿Es usted un adulto mayor? Su familiar responsable crea su cuenta desde SilverAid.</p>
       <p class="login-switch">¿Ya tiene cuenta? <button type="button" class="link-btn" data-show="login">Iniciar sesión</button></p>
     </section>
 
     <a href="index.html" class="back-link">← Volver a la página de inicio</a>
   </main>
 
-  <script src="js/auth.js?v=7"></script>
+  <script src="js/auth.js?v=9"></script>
   <script>
     (function () {
       const panels = { login: document.getElementById('panel-login'), register: document.getElementById('panel-register') };
 
       function show(name) {
         Object.entries(panels).forEach(([k, el]) => { el.hidden = k !== name; });
-        panels[name].querySelector('input:not([type="radio"])').focus();
+        panels[name].querySelector('input, a')?.focus();
       }
-
-      const reg = document.getElementById('form-register');
       function showError(form, msg) {
         const p = form.querySelector('.form-error');
         p.textContent = msg;
         p.hidden = !msg;
       }
-      function enter(data) {
-        SAAuth.set({ token: data.token, username: data.user.username, name: data.user.name, role: data.user.role });
-        location.replace(SAAuth.home(data.user.role));
-      }
-
-      /** Mismas reglas que el servidor: CC y CE solo dígitos; pasaporte y PPT letras y números. */
-      function docOk(type, value) {
-        const v = value.replace(/[.\s]/g, '');
-        return ['CC', 'CE'].includes(type) ? /^[0-9]{4,12}$/.test(v) : /^[A-Za-z0-9]{4,20}$/.test(v);
-      }
-
-      // Datos del familiar y del adulto mayor en desplegables: la cabecera dice cuántos datos
-      // obligatorios faltan y solo puede haber uno abierto a la vez.
-      const PHONE = /^[0-9+()\-\s]{7,20}$/;
-      const EMAIL = /^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/;
-      const selfPanel = document.getElementById('self-panel');
-      const elderPanel = document.getElementById('elder-panel');
-      const regPanels = [selfPanel, elderPanel];
-      const isClient = () => reg.elements.role.value === 'cliente';
-      const isCollab = () => reg.elements.role.value === 'colaborador';
-      const isCare = () => reg.elements.role.value === 'cuidador';
-      /** Afiliación como independiente: el cuidador siempre; el colaborador si responde «Sí». */
-      const needsSocial = () => isCare() || (isCollab() && reg.elements.socialSecurity.value === 'si');
-      const needsDoc = () => isClient() || isCollab();
-      // PDF de colaborador y cuidador, en el orden del formulario: campo → tamaño máximo, descripción,
-      // cuándo se pide y si es opcional.
-      const PDF_FILES = {
-        documentFile: { kb: 300, what: 'su documento de identidad', when: isCollab },
-        licenseFile: { kb: 300, what: 'su pase de conducción', when: () => isCollab() && reg.elements.license.value === 'si' },
-        rutFile: { kb: 300, what: 'su RUT', when: isCare },
-        certificate: { kb: 300, what: 'el certificado de afiliación a salud', when: needsSocial },
-        pensionFile: { kb: 300, what: 'el certificado de afiliación a pensión', when: needsSocial },
-        arlFile: { kb: 300, what: 'el certificado de afiliación a la ARL', when: needsSocial },
-        rethusFile: { kb: 300, what: 'el certificado del RETHUS', when: isCare },
-      };
-      /** Campos de PDF obligatorios según el rol y las respuestas. */
-      const neededFiles = () => Object.keys(PDF_FILES).filter((k) => PDF_FILES[k].when());
-      /** Problema del PDF adjunto en ese campo, o '' si está bien. */
-      function pdfProblem(field) {
-        const { kb, what } = PDF_FILES[field];
-        return fileProblem(reg.elements[field].files[0], kb, what);
-      }
-      function fileProblem(file, kb, what) {
-        if (!file) return `Adjunte ${what} en PDF.`;
-        if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') return `El archivo con ${what} debe ser un PDF.`;
-        if (file.size > kb * 1024) return `El PDF con ${what} pesa ${Math.ceil(file.size / 1024)} KB; el máximo es ${kb} KB.`;
-        return '';
-      }
-      // Títulos del cuidador: una fila por título con su PDF; «➕ Agregar título» añade otra (hasta MAX_TITLES).
-      const MAX_TITLES = 5;
-      const titlesList = document.getElementById('titles-list');
-      const titleInputs = () => [...titlesList.querySelectorAll('input[type="file"]')];
-      /** Títulos con archivo elegido: [{ input, file }]. Las filas vacías no cuentan. */
-      const chosenTitles = () => titleInputs().filter((i) => i.files.length).map((input) => ({ input, file: input.files[0] }));
-      /** Primer título con problema: { input, msg } o null. */
-      function titleProblem() {
-        for (const [n, input] of titleInputs().entries()) {
-          if (!input.files.length) continue;
-          const msg = fileProblem(input.files[0], 300, `el título ${n + 1}`);
-          if (msg) return { input, msg };
-        }
-        return null;
-      }
-      function renumberTitles() {
-        titlesList.querySelectorAll('.title-row').forEach((row, i) => {
-          row.querySelector('.title-name').textContent = `Título ${i + 1}`;
-          row.querySelector('[data-remove-title]').setAttribute('aria-label', `Quitar título ${i + 1}`);
-        });
-        const add = document.getElementById('btn-add-title');
-        add.disabled = titleInputs().length >= MAX_TITLES;
-        add.textContent = add.disabled ? `Máximo ${MAX_TITLES} títulos` : '➕ Agregar título';
-      }
-      function addTitle(focus) {
-        if (titleInputs().length >= MAX_TITLES) return;
-        const row = document.createElement('div');
-        row.className = 'title-row';
-        row.innerHTML = `<label class="file-field"><span class="title-name"></span>
-            <input name="titleFile" type="file" accept="application/pdf,.pdf"></label>
-          <button type="button" class="btn ghost small" data-remove-title>✕ Quitar</button>`;
-        titlesList.appendChild(row);
-        renumberTitles();
-        if (focus) row.querySelector('input').focus();
-      }
-      document.getElementById('btn-add-title').addEventListener('click', () => addTitle(true));
-      titlesList.addEventListener('click', (e) => {
-        const btn = e.target.closest('[data-remove-title]');
-        if (!btn) return;
-        btn.closest('.title-row').remove();
-        if (!titleInputs().length) addTitle(false); // siempre queda una fila para adjuntar
-        renumberTitles();
-        syncStates();
-      });
-      addTitle(false);
-
-      /** Vehículos del pase elegido ('ambos' = carro y moto). */
-      const vehicles = () => ({ carro: ['carro'], moto: ['moto'], ambos: ['carro', 'moto'] }[reg.elements.licenseVehicle.value] || []);
-      const checkedCats = () => [...reg.querySelectorAll('input[name="licenseCat"]:checked')]
-        .filter((c) => !c.closest('label').hidden).map((c) => c.value);
-      /** Vehículos del pase sin ninguna categoría marcada. */
-      const vehiclesWithoutCat = () => vehicles().filter((v) =>
-        !checkedCats().some((c) => reg.querySelector(`input[name="licenseCat"][value="${c}"]`).closest('label').dataset.for === v));
-      /** Datos que faltan de colaborador o cuidador: escolaridad, preguntas del colaborador y PDF. */
-      function proMissing() {
-        const f = reg.elements;
-        let n = countMissing([f.education.value]);
-        if (isCollab()) {
-          n += countMissing([f.license.value, f.socialSecurity.value]);
-          if (f.license.value === 'si') n += f.licenseVehicle.value ? vehiclesWithoutCat().length : 1;
-        }
-        // Los títulos son opcionales: solo cuentan los adjuntados con algún problema (no PDF o más de 300 KB).
-        const badTitles = isCare() ? chosenTitles().filter(({ file }) => fileProblem(file, 300, '')).length : 0;
-        return n + neededFiles().filter(pdfProblem).length + badTitles;
-      }
-      /** Tipo y número de documento cuentan como dos datos. */
-      const docMissing = (type, num) => (!type ? 2 : docOk(type, num) ? 0 : 1);
-      const countMissing = (checks) => checks.filter((ok) => !ok).length;
-      function selfMissing() {
-        const f = reg.elements;
-        return countMissing([f.name.value.trim(), f.address.value.trim(), PHONE.test(f.mobile.value.trim()), EMAIL.test(f.email.value.trim())])
-          + (needsDoc() ? docMissing(f.docType.value, f.document.value) : 0)
-          + (isCollab() || isCare() ? proMissing() : 0);
-      }
-      function elderMissing() {
-        const f = reg.elements;
-        return countMissing([f.elderName.value.trim(), f.elderAddress.value.trim(), PHONE.test(f.elderMobile.value.trim()), f.elderBloodType.value])
-          + docMissing(f.elderDocType.value, f.elderDocument.value);
-      }
-      function syncStates() {
-        [[selfPanel, selfMissing], [elderPanel, elderMissing]].forEach(([panel, missing]) => {
-          const n = missing();
-          const state = panel.querySelector('.reg-sum-state');
-          state.textContent = n ? `Faltan ${n} dato${n > 1 ? 's' : ''}` : '✔ Completo';
-          state.classList.toggle('done', !n);
-        });
-      }
-      regPanels.forEach((panel) => {
-        panel.addEventListener('input', syncStates);
-        panel.addEventListener('change', syncStates);
-        // El atributo name ya los hace excluyentes; esto cubre los navegadores que no lo soportan.
-        panel.addEventListener('toggle', () => {
-          if (panel.open) regPanels.forEach((other) => { if (other !== panel) other.open = false; });
-        });
-      });
-      /** Abre el panel del campo con error, lleva el cursor a él y muestra el aviso. */
-      function fieldError(panel, field, msg) {
-        panel.open = true;
-        const el = typeof field === 'string' ? reg.elements[field] : field; // nombre del campo o el propio elemento
-        (el.focus ? el : el[0]).focus(); // grupos de opciones: la primera
-        return showError(reg, msg);
-      }
-
-      // Pase de conducción y seguridad social: cada respuesta «Sí» despliega sus datos.
-      function syncCollab() {
-        const f = reg.elements;
-        document.getElementById('license-fields').hidden = f.license.value !== 'si';
-        const vs = vehicles();
-        document.getElementById('license-cats').hidden = !vs.length;
-        reg.querySelectorAll('#license-cats label').forEach((l) => { l.hidden = !vs.includes(l.dataset.for); });
-        document.getElementById('ss-fields').hidden = !needsSocial();
-      }
-      document.getElementById('pro-fields').addEventListener('change', syncCollab);
-
-      // Documento: familiar responsable y colaborador. Datos del adulto mayor: solo el familiar.
-      // Formación, pase y seguridad social: solo el colaborador.
-      function syncRole() {
-        const client = isClient();
-        const collab = isCollab();
-        const title = client ? 'Datos del familiar responsable' : collab ? 'Datos del colaborador' : 'Datos del cuidador';
-        document.getElementById('self-title').textContent = (client ? '👨‍👩‍👧 ' : collab ? '🤝 ' : '🧑‍⚕️ ') + title;
-        document.getElementById('self-legend').textContent = title;
-        document.getElementById('self-doc').hidden = !needsDoc();
-        document.getElementById('pro-fields').hidden = client;
-        document.getElementById('doc-file').hidden = !collab;
-        const role = reg.elements.role.value;
-        reg.querySelectorAll('#pro-fields [data-roles]').forEach((el) => { el.hidden = !el.dataset.roles.split(' ').includes(role); });
-        syncCollab();
-        elderPanel.hidden = !client;
-        if (!client) selfPanel.open = true; // que no quede abierto un panel oculto
-        showError(reg, '');
-        syncStates();
-      }
-      reg.querySelectorAll('input[name="role"]').forEach((r) => r.addEventListener('change', syncRole));
 
       document.querySelectorAll('[data-show]').forEach((b) => b.addEventListener('click', () => show(b.dataset.show)));
       document.querySelectorAll('.pw-toggle').forEach((b) => b.addEventListener('click', () => {
@@ -422,117 +99,21 @@
         if (!f.username.value.trim() || !f.password.value) return showError(f, 'Escriba su usuario y su contraseña.');
         showError(f, '');
         try {
-          enter(await SAAuth.api('/api/login', { method: 'POST', body: { username: f.username.value.trim(), password: f.password.value } }));
+          const data = await SAAuth.api('/api/login', { method: 'POST', body: { username: f.username.value.trim(), password: f.password.value } });
+          SAAuth.set({ token: data.token, username: data.user.username, name: data.user.name, role: data.user.role, status: data.user.status });
+          location.replace(SAAuth.home(data.user.role, data.user.status));
         } catch (err) {
           showError(f, err.message);
           f.password.select();
         }
       });
 
-      /** Contenido del archivo en base64 (sin el prefijo «data:…;base64,»). */
-      const fileBase64 = (file) => new Promise((resolve, reject) => {
-        const r = new FileReader();
-        r.onload = () => resolve(String(r.result).split(',')[1] || '');
-        r.onerror = () => reject(new Error(`No se pudo leer el archivo «${file.name}».`));
-        r.readAsDataURL(file);
-      });
-
-      document.getElementById('form-register').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const f = e.target;
-        const role = f.elements.role.value;
-        const client = role === 'cliente';
-        const collab = role === 'colaborador';
-        const care = role === 'cuidador';
-        if (!f.elements.name.value.trim()) return fieldError(selfPanel, 'name', 'Escriba su nombre y apellidos.');
-        if (client || collab) {
-          if (!f.docType.value) return fieldError(selfPanel, 'docType', 'Seleccione su tipo de documento.');
-          if (!docOk(f.docType.value, f.document.value)) return fieldError(selfPanel, 'document', 'Revise su número de documento.');
-        }
-        if (!f.address.value.trim()) return fieldError(selfPanel, 'address', 'Escriba su dirección.');
-        if (!PHONE.test(f.mobile.value.trim())) return fieldError(selfPanel, 'mobile', 'Escriba un número de celular válido.');
-        if (!EMAIL.test(f.email.value.trim())) return fieldError(selfPanel, 'email', 'Escriba un correo electrónico válido.');
-        if (collab || care) {
-          if (!f.education.value) return fieldError(selfPanel, 'education', 'Seleccione su nivel de escolaridad.');
-        }
-        if (collab) {
-          if (!f.license.value) return fieldError(selfPanel, 'license', 'Indique si tiene pase de conducción.');
-          if (f.license.value === 'si') {
-            if (!f.licenseVehicle.value) return fieldError(selfPanel, 'licenseVehicle', 'Indique si su pase es para carro, moto o ambos.');
-            const missing = vehiclesWithoutCat();
-            if (missing.length) return fieldError(selfPanel, 'licenseCat', `Seleccione la categoría de su pase para ${missing.join(' y ')}.`);
-          }
-          if (!f.socialSecurity.value) return fieldError(selfPanel, 'socialSecurity', 'Indique si está afiliado a seguridad social como independiente.');
-        }
-        if (care) {
-          const bad = titleProblem();
-          if (bad) return fieldError(selfPanel, bad.input, bad.msg);
-        }
-        for (const field of neededFiles()) { // en el orden del formulario
-          const problem = pdfProblem(field);
-          if (problem) return fieldError(selfPanel, field, problem);
-        }
-        if (client) {
-          if (!f.elderName.value.trim()) return fieldError(elderPanel, 'elderName', 'Escriba el nombre completo del usuario (adulto mayor).');
-          if (!f.elderDocType.value) return fieldError(elderPanel, 'elderDocType', 'Seleccione el tipo de documento del usuario.');
-          if (!docOk(f.elderDocType.value, f.elderDocument.value)) return fieldError(elderPanel, 'elderDocument', 'Revise el número de documento del usuario.');
-          if (!f.elderAddress.value.trim()) return fieldError(elderPanel, 'elderAddress', 'Escriba la dirección del usuario (adulto mayor).');
-          if (!PHONE.test(f.elderMobile.value.trim())) return fieldError(elderPanel, 'elderMobile', 'Escriba un celular válido para el usuario.');
-          if (!f.elderBloodType.value) return fieldError(elderPanel, 'elderBloodType', 'Seleccione el tipo de sangre del usuario.');
-          if (f.elderEmail.value.trim() && !EMAIL.test(f.elderEmail.value.trim())) return fieldError(elderPanel, 'elderEmail', 'El correo electrónico del usuario no es válido.');
-        }
-        if (f.password.value !== f.password2.value) return showError(f, 'Las contraseñas no coinciden.');
-        showError(f, '');
-        const body = {
-          name: f.elements.name.value.trim(), address: f.address.value.trim(), mobile: f.mobile.value.trim(),
-          email: f.email.value.trim(), username: f.username.value.trim(), password: f.password.value, role,
-        };
-        if (client || collab) Object.assign(body, { docType: f.docType.value, document: f.document.value.trim() });
-        if (collab || care) {
-          body.education = f.education.value;
-          if (collab) {
-            Object.assign(body, {
-              license: f.license.value, socialSecurity: f.socialSecurity.value,
-              ...(f.license.value === 'si' ? { licenseVehicle: f.licenseVehicle.value, licenseCategories: checkedCats() } : {}),
-            });
-          }
-          try {
-            for (const field of neededFiles()) {
-              const file = f.elements[field].files[0];
-              body[field] = { name: file.name, data: await fileBase64(file) };
-            }
-            if (care) {
-              body.titlesFiles = [];
-              for (const { file } of chosenTitles()) body.titlesFiles.push({ name: file.name, data: await fileBase64(file) });
-            }
-          } catch (err) { return showError(f, err.message); }
-        }
-        if (client) {
-          Object.assign(body, {
-            elderName: f.elderName.value.trim(), elderDocType: f.elderDocType.value, elderDocument: f.elderDocument.value.trim(),
-            elderAddress: f.elderAddress.value.trim(), elderMobile: f.elderMobile.value.trim(), elderEmail: f.elderEmail.value.trim(),
-            elderBloodType: f.elderBloodType.value,
-          });
-        }
-        try {
-          await SAAuth.api('/api/register', { method: 'POST', body });
-          enter(await SAAuth.api('/api/login', { method: 'POST', body: { username: body.username, password: body.password } }));
-        } catch (err) {
-          showError(f, err.message);
-        }
-      });
-
-      // login.html#registro abre «Crear cuenta»; #registro-cliente, -cuidador o -colaborador además elige el rol.
-      const m = location.hash.match(/^#registro(?:-(cliente|cuidador|colaborador))?$/);
-      if (m) {
-        show('register');
-        if (m[1]) reg.querySelector(`input[name="role"][value="${m[1]}"]`).checked = true;
-      }
-      syncRole();
+      // login.html#registro abre «Crear cuenta».
+      if (location.hash === '#registro') show('register');
 
       // Si ya hay una sesión válida, entra directamente.
       if (SAAuth.get()) {
-        SAAuth.api('/api/me').then(({ user }) => location.replace(SAAuth.home(user.role))).catch(() => SAAuth.clear());
+        SAAuth.api('/api/me').then(({ user }) => location.replace(SAAuth.home(user.role, user.status))).catch(() => SAAuth.clear());
       }
     })();
   </script>

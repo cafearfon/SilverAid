@@ -10,13 +10,14 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=7">
-  <script src="js/auth.js?v=7"></script>
+  <link rel="stylesheet" href="css/styles.css?v=9">
+  <script src="js/auth.js?v=9"></script>
   <script>
     (function () {
       const s = SAAuth.get();
       if (!s) location.replace('login.html');
       else if (s.role === 'usuario') location.replace('usuario.html'); // el adulto mayor tiene su propia página
+      else if (s.status === 'verificacion') location.replace('documentos.html'); // aún debe completar sus documentos
     })();
   </script>
 </head>
@@ -260,14 +261,14 @@
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
-  <script src="js/store.js?v=7"></script>
-  <script src="js/meds.js?v=7"></script>
-  <script src="js/family.js?v=7"></script>
-  <script src="js/sos.js?v=7"></script>
-  <script src="js/assistant.js?v=7"></script>
-  <script src="js/availability.js?v=7"></script>
-  <script src="js/caregivers.js?v=7"></script>
-  <script src="js/elders.js?v=7"></script>
-  <script src="js/main.js?v=7"></script>
+  <script src="js/store.js?v=9"></script>
+  <script src="js/meds.js?v=9"></script>
+  <script src="js/family.js?v=9"></script>
+  <script src="js/sos.js?v=9"></script>
+  <script src="js/assistant.js?v=9"></script>
+  <script src="js/availability.js?v=9"></script>
+  <script src="js/caregivers.js?v=9"></script>
+  <script src="js/elders.js?v=9"></script>
+  <script src="js/main.js?v=9"></script>
 </body>
 </html>

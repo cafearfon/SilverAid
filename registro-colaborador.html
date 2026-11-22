@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SilverAid — Registro de colaborador/a</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css?v=9">
+</head>
+<body class="login-page">
+  <main class="login-wrap wizard-wrap">
+    <a href="index.html" class="login-logo-link" aria-label="SilverAid, volver a la página de inicio">
+      <img class="login-logo" src="assets/brand/silveraid-vertical-color.svg" alt="SilverAid" width="200" height="116">
+    </a>
+
+    <section class="card login-card">
+      <h1>🤝 Registro de colaborador/a</h1>
+      <p class="muted small-text">Acompaña a trámites y citas, lleva medicamentos, conduce y presta otros servicios. Su cuenta quedará <strong>en verificación</strong> hasta que SilverAid revise sus documentos.</p>
+      <form id="reg-form" class="form wizard" novalidate>
+        <ol class="steps" id="steps" aria-hidden="true"></ol>
+        <p class="sr-only" id="step-label" aria-live="polite"></p>
+
+        <section class="step" data-title="Datos personales">
+          <label>Nombre y apellidos * <input name="name" autocomplete="name" required maxlength="80" placeholder="Ej. Juan Pérez Gómez"></label>
+          <div class="form-row">
+            <label>Tipo de documento *
+              <select name="docType" required>
+                <option value="">Seleccione…</option>
+                <option value="CC">Cédula de ciudadanía</option>
+                <option value="CE">Cédula de extranjería</option>
+                <option value="PA">Pasaporte</option>
+                <option value="PPT">Permiso por protección temporal</option>
+              </select>
+            </label>
+            <label>Número de documento * <input name="document" inputmode="numeric" required maxlength="20" placeholder="Ej. 1052345678"></label>
+          </div>
+          <label>Dirección * <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
+          <div class="form-row">
+            <label>Celular * <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
+            <label>Correo electrónico * <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. juan@correo.com"></label>
+          </div>
+        </section>
+
+        <section class="step" data-title="Perfil" hidden>
+          <label>Grado de escolaridad *
+            <select name="education" required>
+              <option value="">Seleccione…</option>
+              <option value="ninguno">Ninguno</option>
+              <option value="primaria">Primaria</option>
+              <option value="bachillerato">Bachillerato</option>
+              <option value="tecnico">Técnico</option>
+              <option value="tecnologo">Tecnólogo</option>
+              <option value="universitario">Universitario</option>
+              <option value="posgrado">Posgrado</option>
+            </select>
+          </label>
+
+          <fieldset class="choice-group">
+            <legend>¿Tiene pase de conducción? *</legend>
+            <label><input type="radio" name="license" value="si"> Sí</label>
+            <label><input type="radio" name="license" value="no"> No</label>
+          </fieldset>
+          <div class="collab-sub" id="license-fields" hidden>
+            <fieldset class="choice-group">
+              <legend>¿Para qué vehículo? *</legend>
+              <label><input type="radio" name="licenseVehicle" value="carro"> 🚗 Carro</label>
+              <label><input type="radio" name="licenseVehicle" value="moto"> 🏍️ Moto</label>
+              <label><input type="radio" name="licenseVehicle" value="ambos"> Carro y moto</label>
+            </fieldset>
+            <fieldset class="choice-group" id="license-cats" hidden>
+              <legend>Categoría del pase *</legend>
+              <label data-for="moto"><input type="checkbox" name="licenseCat" value="A1"> A1</label>
+              <label data-for="moto"><input type="checkbox" name="licenseCat" value="A2"> A2</label>
+              <label data-for="carro"><input type="checkbox" name="licenseCat" value="B1"> B1</label>
+              <label data-for="carro"><input type="checkbox" name="licenseCat" value="B2"> B2</label>
+              <label data-for="carro"><input type="checkbox" name="licenseCat" value="B3"> B3</label>
+              <label data-for="carro"><input type="checkbox" name="licenseCat" value="C1"> C1</label>
+              <label data-for="carro"><input type="checkbox" name="licenseCat" value="C2"> C2</label>
+              <label data-for="carro"><input type="checkbox" name="licenseCat" value="C3"> C3</label>
+            </fieldset>
+          </div>
+
+          <fieldset class="choice-group">
+            <legend>¿Está afiliado a seguridad social como independiente? *</legend>
+            <label><input type="radio" name="socialSecurity" value="si"> Sí</label>
+            <label><input type="radio" name="socialSecurity" value="no"> No</label>
+          </fieldset>
+        </section>
+
+        <section class="step" data-title="Documentos" hidden>
+          <div class="info-box">
+            <strong>📎 Puede adjuntarlos ahora o después.</strong>
+            Si no los tiene a mano, cree la cuenta y súbalos más tarde desde «Mis documentos». Cada documento en PDF de máximo 300 KB.
+          </div>
+          <label class="file-field">Documento de identidad escaneado
+            <input name="documentFile" type="file" accept="application/pdf,.pdf">
+            <small class="muted">Las dos caras del documento en un solo PDF.</small>
+          </label>
+          <label class="file-field" id="doc-license" hidden>Pase de conducción escaneado
+            <input name="licenseFile" type="file" accept="application/pdf,.pdf">
+          </label>
+          <div class="collab-sub" id="doc-social" hidden>
+            <p class="small-text"><strong>Afiliación a seguridad social como independiente</strong></p>
+            <label class="file-field">Certificado de afiliación a salud
+              <input name="certificate" type="file" accept="application/pdf,.pdf">
+            </label>
+            <label class="file-field">Certificado de afiliación a pensión
+              <input name="pensionFile" type="file" accept="application/pdf,.pdf">
+            </label>
+            <label class="file-field">Certificado de afiliación a la ARL
+              <input name="arlFile" type="file" accept="application/pdf,.pdf">
+            </label>
+          </div>
+        </section>
+
+        <section class="step" data-title="Acceso" hidden>
+          <label>Usuario * <input name="username" autocomplete="username" required placeholder="Letras y números, sin espacios"></label>
+          <label>Contraseña *
+            <span class="pw-field">
+              <input name="password" type="password" autocomplete="new-password" required>
+              <button type="button" class="btn ghost small pw-toggle" aria-label="Mostrar contraseña">Ver</button>
+            </span>
+          </label>
+          <label>Repita la contraseña * <input name="password2" type="password" autocomplete="new-password" required></label>
+        </section>
+
+        <p class="form-error" role="alert" hidden></p>
+        <div class="wizard-nav">
+          <button type="button" class="btn ghost" data-prev hidden>← Atrás</button>
+          <button class="btn big" data-next>Siguiente →</button>
+        </div>
+      </form>
+      <p class="login-switch"><a href="login.html#registro">← Elegir otro tipo de cuenta</a> · ¿Ya tiene cuenta? <a href="login.html">Iniciar sesión</a></p>
+    </section>
+  </main>
+
+  <script src="js/auth.js?v=9"></script>
+  <script src="js/registro.js?v=9"></script>
+  <script>
+    (function () {
+      const form = document.getElementById('reg-form');
+      const f = form.elements;
+      const { PHONE, EMAIL, docOk, fileProblem, pdfPayload } = SAReg;
+
+      /** Vehículos del pase elegido ('ambos' = carro y moto). */
+      const vehicles = () => ({ carro: ['carro'], moto: ['moto'], ambos: ['carro', 'moto'] }[f.licenseVehicle.value] || []);
+      const visibleCats = () => [...form.querySelectorAll('#license-cats label')].filter((l) => !l.hidden);
+      const checkedCats = () => visibleCats().map((l) => l.querySelector('input')).filter((i) => i.checked).map((i) => i.value);
+      /** Vehículos del pase sin ninguna categoría marcada. */
+      const vehiclesWithoutCat = () => vehicles().filter((v) => !visibleCats().some((l) => l.dataset.for === v && l.querySelector('input').checked));
+      const licensed = () => f.license.value === 'si';
+      const affiliated = () => f.socialSecurity.value === 'si';
+
+      // Las respuestas «Sí» despliegan sus datos y deciden qué documentos se piden.
+      function sync() {
+        document.getElementById('license-fields').hidden = !licensed();
+        const vs = vehicles();
+        document.getElementById('license-cats').hidden = !vs.length;
+        form.querySelectorAll('#license-cats label').forEach((l) => { l.hidden = !vs.includes(l.dataset.for); });
+        document.getElementById('doc-license').hidden = !licensed();
+        document.getElementById('doc-social').hidden = !affiliated();
+      }
+      form.addEventListener('change', sync);
+
+      /** Documentos que corresponden según las respuestas: [campo, descripción]. */
+      const docs = () => [
+        ['documentFile', 'su documento de identidad'],
+        ...(licensed() ? [['licenseFile', 'su pase de conducción']] : []),
+        ...(affiliated() ? [['certificate', 'el certificado de afiliación a salud'], ['pensionFile', 'el certificado de afiliación a pensión'],
+          ['arlFile', 'el certificado de afiliación a la ARL']] : []),
+      ];
+
+      SAReg.init({
+        role: 'colaborador',
+        onShow: sync,
+        steps: [
+          () => {
+            if (!f.name.value.trim()) return { field: 'name', msg: 'Escriba su nombre y apellidos.' };
+            if (!f.docType.value) return { field: 'docType', msg: 'Seleccione su tipo de documento.' };
+            if (!docOk(f.docType.value, f.document.value)) return { field: 'document', msg: 'Revise su número de documento.' };
+            if (!f.address.value.trim()) return { field: 'address', msg: 'Escriba su dirección.' };
+            if (!PHONE.test(f.mobile.value.trim())) return { field: 'mobile', msg: 'Escriba un número de celular válido.' };
+            if (!EMAIL.test(f.email.value.trim())) return { field: 'email', msg: 'Escriba un correo electrónico válido.' };
+            return null;
+          },
+          () => {
+            if (!f.education.value) return { field: 'education', msg: 'Seleccione su grado de escolaridad.' };
+            if (!f.license.value) return { field: 'license', msg: 'Indique si tiene pase de conducción.' };
+            if (licensed()) {
+              if (!f.licenseVehicle.value) return { field: 'licenseVehicle', msg: 'Indique si su pase es para carro, moto o ambos.' };
+              const missing = vehiclesWithoutCat();
+              if (missing.length) return { field: 'licenseCat', msg: `Seleccione la categoría de su pase para ${missing.join(' y ')}.` };
+            }
+            if (!f.socialSecurity.value) return { field: 'socialSecurity', msg: 'Indique si está afiliado a seguridad social como independiente.' };
+            return null;
+          },
+          () => {
+            for (const [name, what] of docs()) {
+              const msg = fileProblem(f[name].files[0], what);
+              if (msg) return { field: name, msg };
+            }
+            return null;
+          },
+        ],
+        async body() {
+          const data = {
+            name: f.name.value.trim(), docType: f.docType.value, document: f.document.value.trim(),
+            address: f.address.value.trim(), mobile: f.mobile.value.trim(), email: f.email.value.trim(),
+            education: f.education.value, license: f.license.value, socialSecurity: f.socialSecurity.value,
+            ...(licensed() ? { licenseVehicle: f.licenseVehicle.value, licenseCategories: checkedCats() } : {}),
+          };
+          for (const [name] of docs()) if (f[name].files[0]) data[name] = await pdfPayload(f[name].files[0]);
+          return data;
+        },
+      });
+    })();
+  </script>
+</body>
+</html>

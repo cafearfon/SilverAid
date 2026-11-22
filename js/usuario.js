@@ -91,7 +91,7 @@
     $('user-chip').textContent = `👤 ${SA.session.name}`;
     $('btn-logout').addEventListener('click', () => SAAuth.logout());
     SAAuth.api('/api/me')
-      .then(({ user }) => { if (user.role !== 'usuario') location.replace(SAAuth.home(user.role)); })
+      .then(({ user }) => { if (user.role !== 'usuario') location.replace(SAAuth.home(user.role, user.status)); })
       .catch(() => { SAAuth.clear(); location.replace('login.html'); });
 
     $('tabs').addEventListener('click', (e) => { const v = e.target.closest('button')?.dataset.view; if (v) SA.showView(v); });

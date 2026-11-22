@@ -1,0 +1,169 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>SilverAid — Mis documentos</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="css/styles.css?v=9">
+  <script src="js/auth.js?v=9"></script>
+  <script>
+    (function () {
+      const s = SAAuth.get();
+      if (!s) location.replace('login.html');
+      else if (!['cuidador', 'colaborador'].includes(s.role)) location.replace(SAAuth.home(s.role, s.status));
+    })();
+  </script>
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="documentos.html" aria-label="SilverAid, mis documentos">
+      <img class="logo logo-color" src="assets/brand/silveraid-horizontal-color.svg" alt="SilverAid" width="187" height="48">
+    </a>
+    <div class="a11y">
+      <a class="chip" id="app-link" href="app.html" hidden>Ir a la aplicación →</a>
+      <span class="chip user-chip" id="user-chip"></span>
+      <button id="btn-logout" class="chip">Salir ⎋</button>
+    </div>
+  </header>
+
+  <main class="docs-page">
+    <h1>📎 Mis documentos</h1>
+    <div class="status-banner" id="status-banner" role="status"></div>
+
+    <article class="card">
+      <h2>Documentos obligatorios</h2>
+      <p class="muted small-text">Cada documento en PDF de máximo 300 KB. Puede reemplazar uno ya subido eligiendo otro archivo.</p>
+      <ul class="doc-list" id="doc-list"></ul>
+    </article>
+
+    <article class="card" id="titles-card" hidden>
+      <h2>Títulos obtenidos <span class="muted small-text">(opcional)</span></h2>
+      <p class="muted small-text">Un PDF por título (diploma o acta de grado), de máximo 300 KB cada uno. Hasta 5 títulos.</p>
+      <ul class="doc-list" id="title-list"></ul>
+      <label class="btn ghost small file-btn" id="title-add">➕ Agregar título
+        <input type="file" accept="application/pdf,.pdf" class="sr-only" id="title-input">
+      </label>
+    </article>
+
+    <p class="form-error" role="alert" id="docs-error" hidden></p>
+  </main>
+
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script src="js/registro.js?v=9"></script>
+  <script>
+    (function () {
+      const $ = (id) => document.getElementById(id);
+      const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const LABELS = {
+        documento: 'Documento de identidad (las dos caras en un PDF)', pase: 'Pase de conducción', rut: 'RUT ante la DIAN',
+        salud: 'Certificado de afiliación a salud', pension: 'Certificado de afiliación a pensión',
+        arl: 'Certificado de afiliación a la ARL', rethus: 'Certificado de inscripción en el RETHUS',
+      };
+      const MAX_TITLES = 5;
+      let user = null;
+
+      function toast(msg, kind = 'info') {
+        const el = document.createElement('div');
+        el.className = 'toast ' + kind;
+        el.textContent = msg;
+        $('toasts').appendChild(el);
+        setTimeout(() => el.remove(), 5000);
+      }
+      const showError = (msg) => { $('docs-error').textContent = msg || ''; $('docs-error').hidden = !msg; };
+      function handleError(err) {
+        if (err.status === 401) { SAAuth.clear(); location.replace('login.html'); return; }
+        showError(err.message);
+      }
+
+      function render() {
+        const session = SAAuth.get();
+        SAAuth.set({ ...session, status: user.status, name: user.name });
+        $('user-chip').textContent = `👤 ${user.name} · ${SAAuth.ROLES[user.role] || user.role}`;
+        const missing = user.missingDocuments.length;
+        const active = user.status === 'activo';
+        $('app-link').hidden = !active;
+        $('status-banner').className = 'status-banner ' + (active ? 'ok' : missing ? 'warn' : 'info');
+        $('status-banner').innerHTML = active
+          ? '<strong>✅ Cuenta activa.</strong> Su documentación fue revisada. <a href="app.html">Ir a la aplicación →</a>'
+          : missing
+            ? `<strong>⏳ Cuenta en verificación.</strong> Le falta${missing > 1 ? 'n' : ''} ${missing} documento${missing > 1 ? 's' : ''}. Cuando los suba todos, SilverAid revisará su cuenta y la activará.`
+            : '<strong>📬 Documentación completa.</strong> SilverAid la está revisando; le avisaremos cuando su cuenta esté activa.';
+
+        $('doc-list').innerHTML = user.requiredDocuments.map((kind) => {
+          const file = user.attachments[kind];
+          return `<li class="doc-item ${file ? 'done' : 'missing'}">
+            <span class="doc-state" aria-hidden="true">${file ? '✔' : '✖'}</span>
+            <span class="doc-info"><strong>${LABELS[kind] || kind}</strong>
+              <span class="sub">${file ? 'Subido: ' + esc(file) : 'Pendiente'}</span></span>
+            <label class="btn ${file ? 'ghost' : ''} small file-btn">${file ? 'Reemplazar' : 'Subir PDF'}
+              <input type="file" accept="application/pdf,.pdf" class="sr-only" data-kind="${kind}" aria-label="${file ? 'Reemplazar' : 'Subir'} ${LABELS[kind] || kind}">
+            </label>
+          </li>`;
+        }).join('') || '<li class="muted">Su cuenta no necesita documentos.</li>';
+
+        const isCare = user.role === 'cuidador';
+        $('titles-card').hidden = !isCare;
+        if (isCare) {
+          const titles = Object.keys(user.attachments).filter((k) => k.startsWith('titulos-'))
+            .sort((a, b) => a.split('-')[1] - b.split('-')[1]);
+          $('title-list').innerHTML = titles.map((k, i) => `<li class="doc-item done">
+              <span class="doc-state" aria-hidden="true">🎓</span>
+              <span class="doc-info"><strong>Título ${i + 1}</strong><span class="sub">${esc(user.attachments[k])}</span></span>
+              <button class="btn ghost small" data-remove="${k.split('-')[1]}" aria-label="Quitar título ${i + 1}">✕ Quitar</button>
+            </li>`).join('') || '<li class="muted small-text">Todavía no ha subido títulos.</li>';
+          const full = titles.length >= MAX_TITLES;
+          $('title-input').disabled = full;
+          $('title-add').classList.toggle('disabled', full);
+          $('title-add').firstChild.textContent = full ? `Máximo ${MAX_TITLES} títulos ` : '➕ Agregar título ';
+        }
+      }
+
+      async function load() {
+        try {
+          ({ user } = await SAAuth.api('/api/me'));
+          if (!['cuidador', 'colaborador'].includes(user.role)) return location.replace(SAAuth.home(user.role, user.status));
+          render();
+        } catch (err) { handleError(err); }
+      }
+
+      async function upload(kind, input, what) {
+        const file = input.files[0];
+        input.value = '';
+        if (!file) return;
+        const problem = SAReg.fileProblem(file, what);
+        if (problem) return showError(problem);
+        showError('');
+        try {
+          ({ user } = await SAAuth.api('/api/me/documents', { method: 'POST', body: { kind, file: await SAReg.pdfPayload(file) } }));
+          render();
+          toast('Documento guardado.', 'ok');
+        } catch (err) { handleError(err); }
+      }
+
+      $('doc-list').addEventListener('change', (e) => {
+        const kind = e.target.dataset.kind;
+        if (kind) upload(kind, e.target, (LABELS[kind] || 'el documento').toLowerCase());
+      });
+      $('title-input').addEventListener('change', (e) => upload('titulos', e.target, 'el título'));
+      $('title-list').addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-remove]');
+        if (!b) return;
+        try {
+          ({ user } = await SAAuth.api('/api/me/documents/titulos-' + b.dataset.remove, { method: 'DELETE' }));
+          render();
+          toast('Título quitado.', 'ok');
+        } catch (err) { handleError(err); }
+      });
+      $('btn-logout').addEventListener('click', () => SAAuth.logout());
+
+      load();
+      setInterval(load, 30000); // por si el administrador activa la cuenta mientras está aquí
+    })();
+  </script>
+</body>
+</html>
