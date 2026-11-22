@@ -66,21 +66,95 @@
   }
 
   // ---------- Persistencia ----------
+  // Los datos viven en la base de datos del navegador (IndexedDB, js/db.js) y se sincronizan con el servidor
+  // (/api/me/state) cuando hay conexión; gana el cambio más reciente. localStorage guarda solo una copia
+  // para pintar la pantalla al instante mientras se abre IndexedDB.
+  const STAMP = KEY + ':ts';
+  const logged = !!(window.SAAuth && SAAuth.get());
+
+  function normalize(s) {
+    if (!s || !Array.isArray(s.meds)) return null;
+    // Solicitudes que quedaron "buscando" al recargar → confirmadas.
+    (s.requests || []).forEach((r) => { if (r.status === 'buscando') r.status = 'confirmada'; });
+    s.user = { ...(s.user || {}), name: SA.session.name };
+    return s;
+  }
   function load() {
     try {
-      const s = JSON.parse(localStorage.getItem(KEY));
-      if (s && Array.isArray(s.meds)) {
-        // Solicitudes que quedaron "buscando" al recargar → confirmadas.
-        s.requests.forEach((r) => { if (r.status === 'buscando') r.status = 'confirmada'; });
-        s.user.name = SA.session.name;
-        return s;
-      }
+      const s = normalize(JSON.parse(localStorage.getItem(KEY)));
+      if (s) return s;
     } catch (e) { /* datos corruptos o almacenamiento bloqueado */ }
-    return seed();
+    return null;
   }
-  SA.state = load();
-  SA.save = () => { try { localStorage.setItem(KEY, JSON.stringify(SA.state)); } catch (e) { /* sin almacenamiento */ } };
+  const snapshot = load();
+  SA.state = snapshot || seed();
+  SA.updatedAt = (snapshot && Number(localStorage.getItem(STAMP))) || 0; // 0 = datos de ejemplo sin tocar
+
+  function snapshotSave() {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(SA.state));
+      localStorage.setItem(STAMP, String(SA.updatedAt));
+    } catch (e) { /* sin almacenamiento */ }
+  }
+  /** Sustituye los datos por otros más recientes (de IndexedDB o del servidor) y repinta. */
+  function adopt(data, updatedAt) {
+    const s = normalize(data);
+    if (!s) return;
+    SA.state = s;
+    SA.updatedAt = updatedAt;
+    snapshotSave();
+    window.dispatchEvent(new Event('sa:state')); // p. ej. vuelve a aplicar texto grande / alto contraste
+    SA.renderAll();
+  }
+
+  let syncTimer = null;
+  SA.save = () => {
+    SA.updatedAt = Date.now();
+    snapshotSave();
+    if (!logged || !window.SADB) return;
+    const session = SAAuth.get();
+    SADB.putState({ username: SA.session.username, data: SA.state, updatedAt: SA.updatedAt, synced: false, token: session.token })
+      .then(() => {
+        window.SAPWA && SAPWA.refreshPending();
+        clearTimeout(syncTimer);   // agrupa los cambios seguidos en un solo envío
+        syncTimer = setTimeout(() => window.SAPWA && SAPWA.requestSync(), 1500);
+      })
+      .catch(() => { /* IndexedDB no disponible: queda la copia de localStorage */ });
+  };
   SA.reset = () => { SA.state = seed(); SA.save(); SA.renderAll(); };
+
+  /** Al abrir: IndexedDB y luego el servidor; se queda con la versión más reciente. */
+  SA.ready = (async () => {
+    if (!logged || !window.SADB) return;
+    const session = SAAuth.get();
+    let rec = null;
+    try { rec = await SADB.getState(SA.session.username); } catch (e) { return; }
+    if (rec && rec.updatedAt > SA.updatedAt) adopt(rec.data, rec.updatedAt);
+    else if (!rec && SA.updatedAt) {
+      // Datos de versiones anteriores (solo en localStorage): pasan a IndexedDB y al servidor.
+      await SADB.putState({ username: SA.session.username, data: SA.state, updatedAt: SA.updatedAt, synced: false, token: session.token });
+      rec = await SADB.getState(SA.session.username);
+    }
+    try {
+      const remote = await SAAuth.api('/api/me/state');
+      const localStamp = rec ? rec.updatedAt : 0;
+      if (remote.state && remote.updatedAt > localStamp && (!rec || rec.synced || remote.updatedAt > SA.updatedAt)) {
+        await SADB.putState({ username: SA.session.username, data: remote.state, updatedAt: remote.updatedAt, synced: true, token: session.token });
+        adopt(remote.state, remote.updatedAt);
+      } else if (rec && !rec.synced) {
+        window.SAPWA && SAPWA.requestSync();
+      }
+    } catch (e) { /* sin conexión: se trabaja con lo guardado en el dispositivo */ }
+  })();
+
+  // Otro dispositivo tenía cambios más recientes: el servidor los devolvió al sincronizar.
+  window.addEventListener('sa:synced', async () => {
+    if (!logged || !window.SADB) return;
+    try {
+      const rec = await SADB.getState(SA.session.username);
+      if (rec && rec.updatedAt > SA.updatedAt) adopt(rec.data, rec.updatedAt);
+    } catch (e) { /* nada */ }
+  });
 
   // ---------- Renderizado ----------
   const renderers = [];

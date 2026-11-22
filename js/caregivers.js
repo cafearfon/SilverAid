@@ -18,7 +18,9 @@
   /** Fichas de los cuidadores registrados por el administrador (data/caregivers.txt). */
   async function load() {
     try {
-      SA.CAREGIVERS = (await SAAuth.api('/api/caregivers')).caregivers;
+      const res = await SAAuth.api('/api/caregivers');
+      SA.CAREGIVERS = res.caregivers;
+      SA.caregiversOffline = !!res.offline; // copia guardada en el dispositivo (sin conexión)
       render();
     } catch (err) {
       $('caregiver-list').innerHTML = `<p class="empty">${SA.esc(err.message)}</p>`;
@@ -44,7 +46,8 @@
         }).join('')
       : '<li class="empty">Todavía no ha pedido un cuidador.</li>';
 
-    $('caregiver-list').innerHTML = SA.CAREGIVERS.length
+    $('caregiver-list').innerHTML = (SA.caregiversOffline
+      ? '<p class="offline-note">📡 Sin conexión: esta es la última lista guardada en el dispositivo.</p>' : '') + (SA.CAREGIVERS.length
       ? SA.CAREGIVERS.map((c) => `
       <div class="cg">
         <div class="avatar" aria-hidden="true">${SA.esc(initials(c.name))}</div>
@@ -53,7 +56,7 @@
         <div class="tags">${c.skills.map((s) => `<span class="tag">${SA.SKILLS[s] || SA.esc(s)}</span>`).join('')}</div>
         <p>🕒 ${SAAvail.total(c.availability) ? SA.esc(SAAvail.summary(c.availability)) : 'Sin horario publicado'}</p>
       </div>`).join('')
-      : '<p class="empty">Aún no hay cuidadores registrados.</p>';
+      : '<p class="empty">Aún no hay cuidadores registrados.</p>');
   }
   SA.onRender(render);
 

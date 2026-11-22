@@ -15,6 +15,41 @@ Interfaz en español, letra grande, botones amplios y modo de alto contraste.
 
 Los módulos están conectados: una dosis olvidada, un SOS o una visita de un cuidador generan avisos en el panel de la familia y en la pantalla de inicio.
 
+## Aplicación instalable y sin conexión (PWA)
+
+SilverAid se puede **instalar** en el móvil o en el escritorio y **funciona sin conexión**.
+
+- **Instalar:** botón «📲 Instalar» en la barra superior, en la portada y en las pantallas de acceso (Chrome, Edge y Android).
+  En iPhone/iPad: Compartir → «Añadir a pantalla de inicio» (el botón lo explica). Manifiesto en `manifest.webmanifest`,
+  íconos en `assets/icons/` (normales, *maskable* para Android y `apple-touch-icon`). La app instalada abre en
+  `login.html`, que entra directamente si hay sesión; tiene accesos directos a *Emergencia* y *Medicamentos*.
+- **Service worker** (`sw.js`), estrategias de caché:
+
+  | Qué | Estrategia |
+  |-----|------------|
+  | Páginas | Red primero (máx. 4 s) → copia guardada → `offline.html` si nunca se abrió |
+  | `css/`, `js/`, `assets/` | *Stale-while-revalidate*: responde al instante con la copia y la actualiza en segundo plano |
+  | Fuentes de Google | Caché primero |
+  | `GET /api/…` | Red primero → última respuesta guardada, **separada por usuario** (se borra al cerrar sesión); la página indica «📡 Sin conexión: última lista guardada» |
+  | `POST/PUT/DELETE /api/…` | Siempre a la red; sin conexión, las que lo permiten (el aviso SOS) quedan en cola |
+
+  Al instalarse guarda todas las páginas, estilos, scripts e íconos. Cuando hay una versión nueva avisa con «Actualizar».
+  Al publicar cambios, suba `VERSION` en `sw.js` y el `?v=` de los HTML.
+- **Base de datos del navegador** (IndexedDB, `js/db.js`), usada por las páginas y por el service worker:
+  - `state`: los datos de la aplicación de cada usuario (medicamentos, citas, contactos, tareas…). Cada cambio se guarda
+    al momento en el dispositivo y se sincroniza con el servidor (`GET/PUT /api/me/state`, archivo `data/states.txt`),
+    así se ven también en otro dispositivo. Si hay cambios en los dos, **gana el más reciente**.
+  - `outbox`: peticiones hechas sin conexión. Un **aviso de emergencia sin conexión** queda en la cola, se le dice a la
+    persona que llame al 112 si es grave, y se envía solo al volver la conexión indicando la hora real del aviso.
+  - La sincronización usa **Background Sync** (se envía aunque se haya cerrado la página) y, en navegadores sin él,
+    el evento `online`. Si la sesión caducó, lo pendiente espera a que la persona vuelva a iniciar sesión.
+- Sin conexión aparece una franja «📡 Sin conexión: lo que haga se guarda en este dispositivo (N cambios pendientes)».
+  Registrarse, iniciar sesión, subir documentos o registrar a un familiar necesitan conexión, y lo avisan.
+- **Móvil:** en pantallas estrechas las opciones de la barra superior van en un menú «☰», las secciones de la aplicación
+  pasan a una barra de navegación fija abajo y se respetan las zonas seguras (*notch*) de la app instalada.
+
+El service worker necesita `http://localhost` o HTTPS: para instalarla en un teléfono, publique SilverAid con HTTPS.
+
 ## Cómo ejecutarlo
 
 Necesita Python 3 (sin librerías adicionales):
@@ -37,6 +72,7 @@ Usuario administrador por defecto: **admin / admin**.
 | `documentos.html` | «Mis documentos» del cuidador y del colaborador: lista de documentos obligatorios (✔/✖), subir o reemplazar cada PDF y, el cuidador, agregar o quitar títulos. |
 | `app.html` | La aplicación (requiere sesión). |
 | `admin.html` | Administración (solo admin). |
+| `offline.html` | Se muestra sin conexión cuando la página pedida todavía no está guardada en el dispositivo. |
 
 ## Usuarios e inicio de sesión
 
@@ -83,7 +119,8 @@ Archivos de datos (en `data/`, fuera de git):
 | `attachments.txt` | `id;usuario;clase;nombre_archivo;fecha;contenido` — PDF del colaborador (`clase`: `documento`, `pase`, `salud`, `pension`, `arl`, `rut`, `rethus` o `titulos-1`…`titulos-5`; contenido en base64) |
 | `caregivers.txt` | `id;nombre;documento;fecha_nacimiento;telefono;email;direccion;zona;titulo;experiencia;habilidades;disponibilidad;usuario;fecha_registro` — disponibilidad como `lun=8,9,10\|mar=14,15` (horas de inicio de cada franja de 1 h) |
 | `sos.txt` | `id;fecha;usuario;nombre;motivo;lat;lng;estado;atendido_por;fecha_atencion;nota` |
-- Cada usuario tiene sus propios datos de demo (medicamentos, citas, etc.) en el navegador.
+| `states.txt` | `usuario;actualizado;contenido` — datos de la aplicación de cada usuario sincronizados desde IndexedDB (JSON en base64; `actualizado` = marca de tiempo en ms del último cambio) |
+- Cada usuario tiene sus propios datos de demo (medicamentos, citas, etc.), guardados en el dispositivo y sincronizados con el servidor.
 
 ⚠️ Las contraseñas se guardan **en texto plano**: es un demo educativo, no lo use con contraseñas reales.
 `data/` está en `.gitignore` para que no se suban al repositorio, y el servidor nunca entrega ese archivo por HTTP.
@@ -93,7 +130,7 @@ Archivos de datos (en `data/`, fuera de git):
 
 ## Notas del demo
 
-- Los datos se guardan en el navegador (`localStorage`). El botón **↺ Reiniciar demo** restaura los datos de ejemplo.
+- Los datos se guardan en el navegador (IndexedDB, con una copia en `localStorage` para mostrarse al instante) y se sincronizan con el servidor. El botón **↺ Reiniciar demo** restaura los datos de ejemplo.
 - Los avisos a la familia son simulados (aparecen en el panel); en producción se enviarían por SMS o notificación push.
 - El asistente usa reglas locales; en producción se conectaría a un modelo de lenguaje.
 - Los 5 cuidadores de ejemplo (datos ficticios) se crean la primera vez que arranca el servidor.
@@ -112,6 +149,12 @@ index.html         landing page
 login.html         inicio de sesión y registro
 app.html           aplicación (requiere sesión)
 admin.html         administración (solo admin)
+offline.html       página sin conexión
+sw.js              service worker: cachés, modo sin conexión y sincronización en segundo plano
+manifest.webmanifest  manifiesto de la aplicación instalable
+assets/icons/      íconos de la aplicación instalada (PNG normales, maskable y apple-touch-icon)
+js/db.js           base de datos del navegador (IndexedDB) y sincronización
+js/pwa.js          registro del service worker, «Instalar», estado de la conexión y menú móvil
 css/landing.css    estilos de la landing page
 assets/brand/      logos e ícono
 js/auth.js         sesión y llamadas a la API

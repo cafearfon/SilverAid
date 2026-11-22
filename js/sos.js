@@ -58,11 +58,17 @@
     showOverlay({ title: 'Enviando aviso…', text: 'Obteniendo su ubicación.', actions: [] });
     const loc = await getLocation();
     // Registra la llamada en la central de SilverAid (data/sos.txt), visible para el administrador.
-    let central = true;
+    // Sin conexión queda en la cola del dispositivo (IndexedDB) y se envía sola al volver la conexión,
+    // indicando la hora real del aviso.
+    let central = 'sent';
     try {
-      await SAAuth.api('/api/sos', { method: 'POST', body: { reason, lat: loc?.lat, lng: loc?.lng } });
+      const sent = await SAAuth.api('/api/sos', {
+        method: 'POST', queue: true, label: 'Aviso de emergencia',
+        body: { reason: navigator.onLine ? reason : `${reason} · pedido sin conexión a las ${SA.hhmm()}`, lat: loc?.lat, lng: loc?.lng },
+      });
+      if (sent.queued) central = 'queued';
     } catch (err) {
-      central = false;
+      central = 'failed';
     }
     const names = SA.state.contacts.map((c) => c.name).join(', ') || 'ningún contacto (añada uno en Familia)';
     const link = loc ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}` : null;
@@ -70,7 +76,11 @@
     SA.beep(3, 990);
     showOverlay({
       title: '✅ Aviso enviado',
-      text: `${central ? 'Se ha avisado a la central de SilverAid' : 'No se pudo contactar con la central de SilverAid'} y a: ${names}. ${central ? 'Mantenga la calma, la ayuda está en camino.' : 'Si es grave, llame al 112.'}`,
+      text: {
+        sent: `Se ha avisado a la central de SilverAid y a: ${names}. Mantenga la calma, la ayuda está en camino.`,
+        queued: `No hay conexión: el aviso a la central de SilverAid quedó guardado y se enviará en cuanto vuelva la conexión. Si es grave, llame al 112 o pida ayuda a alguien cerca.`,
+        failed: `No se pudo contactar con la central de SilverAid. Se avisó a: ${names}. Si es grave, llame al 112.`,
+      }[central],
       actions: [['Cerrar', 'ghost', closeOverlay]],
     });
   }

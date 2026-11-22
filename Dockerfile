@@ -9,7 +9,8 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY server.py index.html app.html login.html admin.html usuario.html ./
+# Páginas, service worker y manifiesto de la aplicación instalable (PWA)
+COPY server.py *.html sw.js manifest.webmanifest ./
 COPY css ./css
 COPY js ./js
 COPY assets ./assets

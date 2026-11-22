@@ -92,7 +92,8 @@
     $('btn-logout').addEventListener('click', () => SAAuth.logout());
     SAAuth.api('/api/me')
       .then(({ user }) => { if (user.role !== 'usuario') location.replace(SAAuth.home(user.role, user.status)); })
-      .catch(() => { SAAuth.clear(); location.replace('login.html'); });
+      .catch((err) => { if (err.status === 401) { SAAuth.clear(); location.replace('login.html'); } }); // sin conexión: sigue
+    window.addEventListener('sa:state', applySettings);
 
     $('tabs').addEventListener('click', (e) => { const v = e.target.closest('button')?.dataset.view; if (v) SA.showView(v); });
     window.addEventListener('hashchange', () => SA.showView(location.hash.slice(1)));

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>SilverAid — Sin conexión</title>
+  <meta name="theme-color" content="#92400E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/styles.css?v=10">
+  <script src="js/pwa.js?v=10" defer></script>
+</head>
+<body class="login-page">
+  <main class="login-wrap">
+    <img class="login-logo" src="assets/brand/silveraid-vertical-color.svg" alt="SilverAid" width="200" height="116">
+    <section class="card login-card">
+      <h1>📡 Sin conexión</h1>
+      <p>Esta página todavía no está guardada en el dispositivo y no hay conexión a internet.</p>
+      <p class="muted">Las páginas que ya abrió funcionan sin conexión: sus medicamentos, citas y contactos están guardados en este dispositivo, y lo que cambie se enviará solo cuando vuelva la conexión.</p>
+      <div class="wizard-nav">
+        <a class="btn ghost" href="login.html">Ir al inicio</a>
+        <button class="btn big" type="button" onclick="location.reload()">↻ Reintentar</button>
+      </div>
+    </section>
+  </main>
+  <script>window.addEventListener('online', () => location.reload());</script>
+</body>
+</html>

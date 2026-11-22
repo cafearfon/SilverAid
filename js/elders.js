@@ -5,7 +5,9 @@
 
   async function load() {
     try {
-      const { elders } = await SAAuth.api('/api/elders');
+      const res = await SAAuth.api('/api/elders');
+      const { elders } = res;
+      $('elders-offline').hidden = !res.offline;
       $('elder-list').innerHTML = elders.length
         ? elders.map((u) => `
           <li><span><span class="title">${SA.esc(u.name)}</span><span class="sub">@${SA.esc(u.username)}</span></span>
@@ -25,6 +27,7 @@
     $('form-elder').addEventListener('submit', async (e) => {
       e.preventDefault();
       const f = e.target.elements;
+      if (!navigator.onLine) return SA.toast('Para registrar a un familiar necesita conexión a internet.', 'warn');
       try {
         await SAAuth.api('/api/elders', { method: 'POST', body: { name: f.name.value.trim(), username: f.username.value.trim(), password: f.password.value } });
         SA.toast(`Cuenta de ${f.name.value.trim()} enviada. Quedará activa cuando el administrador le dé de alta.`, 'ok', 8000);

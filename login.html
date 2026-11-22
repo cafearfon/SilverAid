@@ -2,15 +2,20 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SilverAid — Iniciar sesión</title>
   <meta name="theme-color" content="#92400E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SilverAid">
   <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
-  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=9">
+  <link rel="stylesheet" href="css/styles.css?v=10">
   <script>
     // Enlaces antiguos (login.html#registro-cuidador…) → la página de registro de ese rol.
     (function () {
@@ -69,7 +74,9 @@
     <a href="index.html" class="back-link">← Volver a la página de inicio</a>
   </main>
 
-  <script src="js/auth.js?v=9"></script>
+  <script src="js/auth.js?v=10"></script>
+  <script src="js/db.js?v=10"></script>
+  <script src="js/pwa.js?v=10"></script>
   <script>
     (function () {
       const panels = { login: document.getElementById('panel-login'), register: document.getElementById('panel-register') };
@@ -111,9 +118,13 @@
       // login.html#registro abre «Crear cuenta».
       if (location.hash === '#registro') show('register');
 
-      // Si ya hay una sesión válida, entra directamente.
+      // Si ya hay una sesión válida, entra directamente (sin conexión, con la sesión guardada en el dispositivo).
       if (SAAuth.get()) {
-        SAAuth.api('/api/me').then(({ user }) => location.replace(SAAuth.home(user.role, user.status))).catch(() => SAAuth.clear());
+        SAAuth.api('/api/me').then(({ user }) => location.replace(SAAuth.home(user.role, user.status))).catch((err) => {
+          const s = SAAuth.get();
+          if (err.status === 0 && s) location.replace(SAAuth.home(s.role, s.status));
+          else SAAuth.clear();
+        });
       }
     })();
   </script>

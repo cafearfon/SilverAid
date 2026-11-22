@@ -2,21 +2,28 @@
 <html lang="es">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>SilverAid — Demo</title>
   <meta name="theme-color" content="#92400E">
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="SilverAid">
   <link rel="icon" type="image/svg+xml" href="assets/brand/silveraid-icono-app.svg">
-  <link rel="apple-touch-icon" href="assets/brand/silveraid-icono-app-1024.png">
+  <link rel="apple-touch-icon" href="assets/icons/apple-touch-icon.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=9">
-  <script src="js/auth.js?v=9"></script>
+  <link rel="stylesheet" href="css/styles.css?v=10">
+  <script src="js/auth.js?v=10"></script>
+  <script src="js/db.js?v=10"></script>
+  <script src="js/pwa.js?v=10"></script>
   <script>
     (function () {
       const s = SAAuth.get();
       if (!s) location.replace('login.html');
-      else if (s.role === 'usuario') location.replace('usuario.html'); // el adulto mayor tiene su propia página
+      else if (s.role === 'usuario') location.replace('usuario.html' + location.hash); // el adulto mayor tiene su propia página
       else if (s.status === 'verificacion') location.replace('documentos.html'); // aún debe completar sus documentos
     })();
   </script>
@@ -37,13 +44,13 @@
     </div>
   </header>
 
-  <nav class="tabs" id="tabs" aria-label="Secciones">
-    <button data-view="home" class="active">🏠 Inicio</button>
-    <button data-view="meds">💊 Medicamentos</button>
-    <button data-view="family">👨‍👩‍👧 Familia</button>
-    <button data-view="sos">🆘 Emergencia</button>
-    <button data-view="assistant">💬 Asistente</button>
-    <button data-view="caregivers">🧑‍⚕️ Cuidadores</button>
+  <nav class="tabs app-nav" id="tabs" aria-label="Secciones">
+    <button data-view="home" class="active"><span class="tab-ico" aria-hidden="true">🏠</span> <span>Inicio</span></button>
+    <button data-view="meds"><span class="tab-ico" aria-hidden="true">💊</span> <span class="tab-full">Medicamentos</span><span class="tab-short">Dosis</span></button>
+    <button data-view="family"><span class="tab-ico" aria-hidden="true">👨‍👩‍👧</span> <span>Familia</span></button>
+    <button data-view="sos"><span class="tab-ico" aria-hidden="true">🆘</span> <span class="tab-full">Emergencia</span><span class="tab-short">SOS</span></button>
+    <button data-view="assistant"><span class="tab-ico" aria-hidden="true">💬</span> <span>Asistente</span></button>
+    <button data-view="caregivers"><span class="tab-ico" aria-hidden="true">🧑‍⚕️</span> <span class="tab-full">Cuidadores</span><span class="tab-short">Cuidado</span></button>
   </nav>
 
   <main>
@@ -107,6 +114,7 @@
       <article class="card" id="elders-card" hidden>
         <h2>👵 Registrar a mi familiar mayor</h2>
         <p class="muted">Cree la cuenta de su familiar. El administrador de SilverAid la revisará y le dará de alta; hasta entonces no podrá iniciar sesión.</p>
+        <p class="offline-note" id="elders-offline" hidden>📡 Sin conexión: estado guardado en el dispositivo; puede haber cambiado.</p>
         <ul id="elder-list" class="list"></ul>
         <form id="form-elder" class="form compact">
           <div class="form-row">
@@ -261,14 +269,14 @@
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
 
-  <script src="js/store.js?v=9"></script>
-  <script src="js/meds.js?v=9"></script>
-  <script src="js/family.js?v=9"></script>
-  <script src="js/sos.js?v=9"></script>
-  <script src="js/assistant.js?v=9"></script>
-  <script src="js/availability.js?v=9"></script>
-  <script src="js/caregivers.js?v=9"></script>
-  <script src="js/elders.js?v=9"></script>
-  <script src="js/main.js?v=9"></script>
+  <script src="js/store.js?v=10"></script>
+  <script src="js/meds.js?v=10"></script>
+  <script src="js/family.js?v=10"></script>
+  <script src="js/sos.js?v=10"></script>
+  <script src="js/assistant.js?v=10"></script>
+  <script src="js/availability.js?v=10"></script>
+  <script src="js/caregivers.js?v=10"></script>
+  <script src="js/elders.js?v=10"></script>
+  <script src="js/main.js?v=10"></script>
 </body>
 </html>

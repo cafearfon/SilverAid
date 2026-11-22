@@ -11,6 +11,7 @@ Sirve la aplicación y una pequeña API. Los datos se guardan en tres tablas:
                  escolaridad;pase_conduccion;pase_vehiculo;pase_categorias;seguridad_social;certificado;
                  adjunto_documento;adjunto_pase;adjunto_pension;adjunto_arl;adjunto_rut;adjunto_titulos;adjunto_rethus
                  (ficha del colaborador y del cuidador; los adjuntos, nombre del archivo)
+    states       datos de la aplicación de cada usuario (JSON en base64), sincronizados desde IndexedDB
     attachments  PDF que adjuntan colaboradores y cuidadores al registrarse (documento, pase, RUT, títulos,
                  RETHUS y certificados de salud, pensión y ARL) en base64
     sos          registro de llamadas del botón de pánico
@@ -31,6 +32,7 @@ Estados: activo, pendiente (esperando alta del administrador), inactivo y verifi
 
 Uso:  python server.py [puerto]
 """
+import base64
 import json
 import os
 import posixpath
@@ -63,7 +65,9 @@ if STORAGE not in ("txt", "mysql"):
 
 # Solo se sirven estos archivos y carpetas (nunca data/, server.py ni .git/).
 PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "/usuario.html", "/favicon.ico",
-                "/registro-familiar.html", "/registro-cuidador.html", "/registro-colaborador.html", "/documentos.html"}
+                "/registro-familiar.html", "/registro-cuidador.html", "/registro-colaborador.html", "/documentos.html",
+                # Aplicación instalable (PWA): manifiesto, service worker (debe estar en la raíz) y página sin conexión
+                "/manifest.webmanifest", "/sw.js", "/offline.html"}
 PUBLIC_DIRS = ("/css/", "/js/", "/assets/")
 
 ROLES = ("usuario", "cliente", "cuidador", "colaborador", "admin")
@@ -323,6 +327,12 @@ ATTACHMENT_ROLES = ("colaborador", "cuidador")
 
 ATTACHMENTS = Table("attachments.txt", ["id", "usuario", "clase", "nombre_archivo", "fecha", "contenido"])
 
+# Datos de la aplicación de cada usuario (medicamentos, citas, contactos…), sincronizados desde la base de datos
+# del navegador (IndexedDB) para que funcione sin conexión. «contenido» es el JSON en base64; «actualizado», la
+# marca de tiempo (ms) del dispositivo que hizo el último cambio: gana el cambio más reciente.
+STATES = Table("states.txt", ["usuario", "actualizado", "contenido"])
+MAX_STATE_BYTES = 800_000
+
 CAREGIVERS = Table(
     "caregivers.txt",
     ["id", "nombre", "documento", "fecha_nacimiento", "telefono", "email", "direccion", "zona",
@@ -556,7 +566,6 @@ def attach_files(data, fields, kinds):
 
 def decode_pdf(value, kind):
     """{name, data (base64)} → fila de ATTACHMENTS sin usuario. Solo PDF, con el tamaño máximo de su clase."""
-    import base64
     import binascii
     _, _, max_kb, what = ATTACHMENT_KINDS[kind]
     if not isinstance(value, dict) or not value.get("data"):
@@ -716,6 +725,36 @@ def sign_up(data, role, registered_by=""):
     return user, None
 
 
+def read_state(username):
+    """{state, updatedAt} guardado para el usuario; state es None si nunca sincronizó."""
+    key = username.lower()
+    with lock:
+        row = next((r for r in STATES.read() if r["usuario"] == key), None)
+    if not row:
+        return {"state": None, "updatedAt": 0}
+    return {"state": json.loads(base64.b64decode(row["contenido"]).decode("utf-8")), "updatedAt": int(row["actualizado"] or 0)}
+
+
+def write_state(username, data):
+    """Guarda el estado si es más reciente que el del servidor (gana el último cambio).
+    Devuelve (estado vigente, error): el dispositivo se pone al día con lo que responda el servidor."""
+    state, stamp = data.get("state"), data.get("updatedAt")
+    if not isinstance(state, dict) or not isinstance(stamp, int) or stamp <= 0:
+        return None, "Datos no válidos."
+    key = username.lower()
+    with lock:
+        rows = STATES.read()
+        row = next((r for r in rows if r["usuario"] == key), None)
+        if not row or stamp > int(row["actualizado"] or 0):
+            content = base64.b64encode(json.dumps(state, ensure_ascii=False).encode("utf-8")).decode("ascii")
+            if len(content) > MAX_STATE_BYTES:
+                return None, "Los datos son demasiado grandes."
+            rows = [r for r in rows if r["usuario"] != key] + [{"usuario": key, "actualizado": str(stamp), "contenido": content}]
+            STATES.write(rows)
+            return {"state": state, "updatedAt": stamp, "saved": True}, None
+    return {**read_state(username), "saved": False}, None
+
+
 def drop_sessions(username):
     for token, key in list(sessions.items()):
         if key == username.lower():
@@ -730,6 +769,8 @@ class Handler(SimpleHTTPRequestHandler):
         ".css": "text/css",
         ".svg": "image/svg+xml",
         ".html": "text/html; charset=utf-8",
+        ".webmanifest": "application/manifest+json",
+        ".png": "image/png",
     }
 
     def __init__(self, *args, **kwargs):
@@ -810,6 +851,11 @@ class Handler(SimpleHTTPRequestHandler):
             user = self.auth(verifying=True)
             if user:
                 self.send_json(HTTPStatus.OK, {"user": public_user(user)})
+
+        elif path == "/api/me/state":
+            user = self.auth()
+            if user:
+                self.send_json(HTTPStatus.OK, read_state(user["usuario"]))
 
         elif path == "/api/caregivers":
             if self.auth():
@@ -1026,9 +1072,15 @@ class Handler(SimpleHTTPRequestHandler):
     # --- PUT (editar)
     def do_PUT(self):
         path = self.clean_path()
-        data = self.read_json()
+        data = self.read_json(MAX_STATE_BYTES + 1000 if path == "/api/me/state" else 20_000)
         if data is None:
-            return self.fail(HTTPStatus.BAD_REQUEST, "Petición no válida.")
+            return self.fail(HTTPStatus.BAD_REQUEST, "Petición no válida o demasiado grande.")
+        if path == "/api/me/state":
+            user = self.auth()
+            if user:
+                result, error = write_state(user["usuario"], data)
+                self.send_json(HTTPStatus.BAD_REQUEST if error else HTTPStatus.OK, {"error": error} if error else result)
+            return
         m = re.fullmatch(r"/api/admin/caregivers/([^/]+)", path)
         if m:
             if not self.auth("admin"):
@@ -1094,6 +1146,7 @@ class Handler(SimpleHTTPRequestHandler):
                 USERS.write(users)
                 if user["rol"] in ATTACHMENT_ROLES:
                     ATTACHMENTS.write([a for a in ATTACHMENTS.read() if a["usuario"].lower() != target.lower()])
+                STATES.write([r for r in STATES.read() if r["usuario"] != target.lower()])
             drop_sessions(target)
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
@@ -1303,7 +1356,7 @@ def main():
         wait_for_mysql()
     with lock:
         # Crea los archivos o tablas si no existen y actualiza los datos de versiones anteriores.
-        for table in (USERS, CAREGIVERS, SOS, SERVICES, ATTACHMENTS):
+        for table in (USERS, CAREGIVERS, SOS, SERVICES, ATTACHMENTS, STATES):
             table.setup()
         users = read_users()
         for u in users:  # adultos mayores registrados por un cliente antes de existir el campo «cliente»
