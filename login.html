@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=3">
+  <link rel="stylesheet" href="css/styles.css?v=7">
 </head>
 <body class="login-page">
   <main class="login-wrap">
@@ -64,12 +64,17 @@
             </label>
             <label>Número de documento * <input name="document" inputmode="numeric" required maxlength="20" placeholder="Ej. 1052345678"></label>
           </div>
+          <label class="file-field" id="doc-file" hidden>Documento de identidad escaneado (PDF, máx. 300 KB) *
+            <input name="documentFile" type="file" accept="application/pdf,.pdf" required>
+            <small class="muted">Las dos caras del documento en un solo PDF.</small>
+          </label>
           <label>Dirección * <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
           <label>Celular * <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
           <label>Correo electrónico * <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. laura@correo.com"></label>
 
-          <div class="collab-fields" id="collab-fields" hidden>
-            <label>Grado de escolaridad *
+          <!-- Colaborador y cuidador: escolaridad y documentos. Cada bloque dice para qué rol es. -->
+          <div class="collab-fields" id="pro-fields" hidden>
+            <label>Nivel de escolaridad *
               <select name="education" required>
                 <option value="">Seleccione…</option>
                 <option value="ninguno">Ninguno</option>
@@ -81,43 +86,70 @@
                 <option value="posgrado">Posgrado</option>
               </select>
             </label>
-
-            <fieldset class="choice-group">
-              <legend>¿Tiene pase de conducción? *</legend>
-              <label><input type="radio" name="license" value="si"> Sí</label>
-              <label><input type="radio" name="license" value="no"> No</label>
+            <fieldset class="titles-field" data-roles="cuidador">
+              <legend>Títulos obtenidos (opcional)</legend>
+              <p class="small-text muted">Un PDF por título (diploma o acta de grado), de máximo 300 KB cada uno. Hasta 5 títulos.</p>
+              <div class="titles-list" id="titles-list"></div>
+              <button type="button" class="btn ghost small" id="btn-add-title">➕ Agregar título</button>
             </fieldset>
-            <div class="collab-sub" id="license-fields" hidden>
+
+            <div class="collab-fields-inner" data-roles="colaborador">
               <fieldset class="choice-group">
-                <legend>¿Para qué vehículo? *</legend>
-                <label><input type="radio" name="licenseVehicle" value="carro"> 🚗 Carro</label>
-                <label><input type="radio" name="licenseVehicle" value="moto"> 🏍️ Moto</label>
-                <label><input type="radio" name="licenseVehicle" value="ambos"> Carro y moto</label>
+                <legend>¿Tiene pase de conducción? *</legend>
+                <label><input type="radio" name="license" value="si"> Sí</label>
+                <label><input type="radio" name="license" value="no"> No</label>
               </fieldset>
-              <fieldset class="choice-group" id="license-cats" hidden>
-                <legend>Categoría del pase *</legend>
-                <label data-for="moto"><input type="checkbox" name="licenseCat" value="A1"> A1</label>
-                <label data-for="moto"><input type="checkbox" name="licenseCat" value="A2"> A2</label>
-                <label data-for="carro"><input type="checkbox" name="licenseCat" value="B1"> B1</label>
-                <label data-for="carro"><input type="checkbox" name="licenseCat" value="B2"> B2</label>
-                <label data-for="carro"><input type="checkbox" name="licenseCat" value="B3"> B3</label>
-                <label data-for="carro"><input type="checkbox" name="licenseCat" value="C1"> C1</label>
-                <label data-for="carro"><input type="checkbox" name="licenseCat" value="C2"> C2</label>
-                <label data-for="carro"><input type="checkbox" name="licenseCat" value="C3"> C3</label>
+              <div class="collab-sub" id="license-fields" hidden>
+                <fieldset class="choice-group">
+                  <legend>¿Para qué vehículo? *</legend>
+                  <label><input type="radio" name="licenseVehicle" value="carro"> 🚗 Carro</label>
+                  <label><input type="radio" name="licenseVehicle" value="moto"> 🏍️ Moto</label>
+                  <label><input type="radio" name="licenseVehicle" value="ambos"> Carro y moto</label>
+                </fieldset>
+                <fieldset class="choice-group" id="license-cats" hidden>
+                  <legend>Categoría del pase *</legend>
+                  <label data-for="moto"><input type="checkbox" name="licenseCat" value="A1"> A1</label>
+                  <label data-for="moto"><input type="checkbox" name="licenseCat" value="A2"> A2</label>
+                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="B1"> B1</label>
+                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="B2"> B2</label>
+                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="B3"> B3</label>
+                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="C1"> C1</label>
+                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="C2"> C2</label>
+                  <label data-for="carro"><input type="checkbox" name="licenseCat" value="C3"> C3</label>
+                </fieldset>
+                <label class="file-field">Pase de conducción escaneado (PDF, máx. 300 KB) *
+                  <input name="licenseFile" type="file" accept="application/pdf,.pdf" required>
+                </label>
+              </div>
+
+              <fieldset class="choice-group">
+                <legend>¿Está afiliado a seguridad social como independiente? *</legend>
+                <label><input type="radio" name="socialSecurity" value="si"> Sí</label>
+                <label><input type="radio" name="socialSecurity" value="no"> No</label>
               </fieldset>
             </div>
 
-            <fieldset class="choice-group">
-              <legend>¿Está afiliado a seguridad social como independiente? *</legend>
-              <label><input type="radio" name="socialSecurity" value="si"> Sí</label>
-              <label><input type="radio" name="socialSecurity" value="no"> No</label>
-            </fieldset>
+            <label class="file-field" data-roles="cuidador">RUT ante la DIAN (PDF, máx. 300 KB) *
+              <input name="rutFile" type="file" accept="application/pdf,.pdf" required>
+            </label>
+
             <div class="collab-sub" id="ss-fields" hidden>
-              <label>Certificado de afiliación a salud (opcional)
-                <input name="certificate" type="file" accept="application/pdf,image/jpeg,image/png">
+              <p class="small-text" data-roles="cuidador"><strong>Afiliación a seguridad social como independiente</strong></p>
+              <label class="file-field">Certificado de afiliación a salud (PDF, máx. 300 KB) *
+                <input name="certificate" type="file" accept="application/pdf,.pdf" required>
               </label>
-              <p class="small-text muted">PDF, JPG o PNG de hasta 2 MB.</p>
+              <label class="file-field">Certificado de afiliación a pensión (PDF, máx. 300 KB) *
+                <input name="pensionFile" type="file" accept="application/pdf,.pdf" required>
+              </label>
+              <label class="file-field">Certificado de afiliación a la ARL (PDF, máx. 300 KB) *
+                <input name="arlFile" type="file" accept="application/pdf,.pdf" required>
+              </label>
             </div>
+
+            <label class="file-field" data-roles="cuidador">Certificado de inscripción en el RETHUS (PDF, máx. 300 KB) *
+              <input name="rethusFile" type="file" accept="application/pdf,.pdf" required>
+              <small class="muted">Registro Único Nacional del Talento Humano en Salud.</small>
+            </label>
           </div>
           </fieldset>
         </details>
@@ -176,7 +208,7 @@
     <a href="index.html" class="back-link">← Volver a la página de inicio</a>
   </main>
 
-  <script src="js/auth.js?v=3"></script>
+  <script src="js/auth.js?v=7"></script>
   <script>
     (function () {
       const panels = { login: document.getElementById('panel-login'), register: document.getElementById('panel-register') };
@@ -212,8 +244,80 @@
       const regPanels = [selfPanel, elderPanel];
       const isClient = () => reg.elements.role.value === 'cliente';
       const isCollab = () => reg.elements.role.value === 'colaborador';
+      const isCare = () => reg.elements.role.value === 'cuidador';
+      /** Afiliación como independiente: el cuidador siempre; el colaborador si responde «Sí». */
+      const needsSocial = () => isCare() || (isCollab() && reg.elements.socialSecurity.value === 'si');
       const needsDoc = () => isClient() || isCollab();
-      const CERT_MAX = 2 * 1024 * 1024;
+      // PDF de colaborador y cuidador, en el orden del formulario: campo → tamaño máximo, descripción,
+      // cuándo se pide y si es opcional.
+      const PDF_FILES = {
+        documentFile: { kb: 300, what: 'su documento de identidad', when: isCollab },
+        licenseFile: { kb: 300, what: 'su pase de conducción', when: () => isCollab() && reg.elements.license.value === 'si' },
+        rutFile: { kb: 300, what: 'su RUT', when: isCare },
+        certificate: { kb: 300, what: 'el certificado de afiliación a salud', when: needsSocial },
+        pensionFile: { kb: 300, what: 'el certificado de afiliación a pensión', when: needsSocial },
+        arlFile: { kb: 300, what: 'el certificado de afiliación a la ARL', when: needsSocial },
+        rethusFile: { kb: 300, what: 'el certificado del RETHUS', when: isCare },
+      };
+      /** Campos de PDF obligatorios según el rol y las respuestas. */
+      const neededFiles = () => Object.keys(PDF_FILES).filter((k) => PDF_FILES[k].when());
+      /** Problema del PDF adjunto en ese campo, o '' si está bien. */
+      function pdfProblem(field) {
+        const { kb, what } = PDF_FILES[field];
+        return fileProblem(reg.elements[field].files[0], kb, what);
+      }
+      function fileProblem(file, kb, what) {
+        if (!file) return `Adjunte ${what} en PDF.`;
+        if (!/\.pdf$/i.test(file.name) && file.type !== 'application/pdf') return `El archivo con ${what} debe ser un PDF.`;
+        if (file.size > kb * 1024) return `El PDF con ${what} pesa ${Math.ceil(file.size / 1024)} KB; el máximo es ${kb} KB.`;
+        return '';
+      }
+      // Títulos del cuidador: una fila por título con su PDF; «➕ Agregar título» añade otra (hasta MAX_TITLES).
+      const MAX_TITLES = 5;
+      const titlesList = document.getElementById('titles-list');
+      const titleInputs = () => [...titlesList.querySelectorAll('input[type="file"]')];
+      /** Títulos con archivo elegido: [{ input, file }]. Las filas vacías no cuentan. */
+      const chosenTitles = () => titleInputs().filter((i) => i.files.length).map((input) => ({ input, file: input.files[0] }));
+      /** Primer título con problema: { input, msg } o null. */
+      function titleProblem() {
+        for (const [n, input] of titleInputs().entries()) {
+          if (!input.files.length) continue;
+          const msg = fileProblem(input.files[0], 300, `el título ${n + 1}`);
+          if (msg) return { input, msg };
+        }
+        return null;
+      }
+      function renumberTitles() {
+        titlesList.querySelectorAll('.title-row').forEach((row, i) => {
+          row.querySelector('.title-name').textContent = `Título ${i + 1}`;
+          row.querySelector('[data-remove-title]').setAttribute('aria-label', `Quitar título ${i + 1}`);
+        });
+        const add = document.getElementById('btn-add-title');
+        add.disabled = titleInputs().length >= MAX_TITLES;
+        add.textContent = add.disabled ? `Máximo ${MAX_TITLES} títulos` : '➕ Agregar título';
+      }
+      function addTitle(focus) {
+        if (titleInputs().length >= MAX_TITLES) return;
+        const row = document.createElement('div');
+        row.className = 'title-row';
+        row.innerHTML = `<label class="file-field"><span class="title-name"></span>
+            <input name="titleFile" type="file" accept="application/pdf,.pdf"></label>
+          <button type="button" class="btn ghost small" data-remove-title>✕ Quitar</button>`;
+        titlesList.appendChild(row);
+        renumberTitles();
+        if (focus) row.querySelector('input').focus();
+      }
+      document.getElementById('btn-add-title').addEventListener('click', () => addTitle(true));
+      titlesList.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-remove-title]');
+        if (!btn) return;
+        btn.closest('.title-row').remove();
+        if (!titleInputs().length) addTitle(false); // siempre queda una fila para adjuntar
+        renumberTitles();
+        syncStates();
+      });
+      addTitle(false);
+
       /** Vehículos del pase elegido ('ambos' = carro y moto). */
       const vehicles = () => ({ carro: ['carro'], moto: ['moto'], ambos: ['carro', 'moto'] }[reg.elements.licenseVehicle.value] || []);
       const checkedCats = () => [...reg.querySelectorAll('input[name="licenseCat"]:checked')]
@@ -221,11 +325,17 @@
       /** Vehículos del pase sin ninguna categoría marcada. */
       const vehiclesWithoutCat = () => vehicles().filter((v) =>
         !checkedCats().some((c) => reg.querySelector(`input[name="licenseCat"][value="${c}"]`).closest('label').dataset.for === v));
-      function collabMissing() {
+      /** Datos que faltan de colaborador o cuidador: escolaridad, preguntas del colaborador y PDF. */
+      function proMissing() {
         const f = reg.elements;
-        let n = countMissing([f.education.value, f.license.value, f.socialSecurity.value]);
-        if (f.license.value === 'si') n += f.licenseVehicle.value ? vehiclesWithoutCat().length : 1;
-        return n;
+        let n = countMissing([f.education.value]);
+        if (isCollab()) {
+          n += countMissing([f.license.value, f.socialSecurity.value]);
+          if (f.license.value === 'si') n += f.licenseVehicle.value ? vehiclesWithoutCat().length : 1;
+        }
+        // Los títulos son opcionales: solo cuentan los adjuntados con algún problema (no PDF o más de 300 KB).
+        const badTitles = isCare() ? chosenTitles().filter(({ file }) => fileProblem(file, 300, '')).length : 0;
+        return n + neededFiles().filter(pdfProblem).length + badTitles;
       }
       /** Tipo y número de documento cuentan como dos datos. */
       const docMissing = (type, num) => (!type ? 2 : docOk(type, num) ? 0 : 1);
@@ -234,7 +344,7 @@
         const f = reg.elements;
         return countMissing([f.name.value.trim(), f.address.value.trim(), PHONE.test(f.mobile.value.trim()), EMAIL.test(f.email.value.trim())])
           + (needsDoc() ? docMissing(f.docType.value, f.document.value) : 0)
-          + (isCollab() ? collabMissing() : 0);
+          + (isCollab() || isCare() ? proMissing() : 0);
       }
       function elderMissing() {
         const f = reg.elements;
@@ -260,9 +370,8 @@
       /** Abre el panel del campo con error, lleva el cursor a él y muestra el aviso. */
       function fieldError(panel, field, msg) {
         panel.open = true;
-        const el = reg.elements[field];
+        const el = typeof field === 'string' ? reg.elements[field] : field; // nombre del campo o el propio elemento
         (el.focus ? el : el[0]).focus(); // grupos de opciones: la primera
-
         return showError(reg, msg);
       }
 
@@ -273,20 +382,23 @@
         const vs = vehicles();
         document.getElementById('license-cats').hidden = !vs.length;
         reg.querySelectorAll('#license-cats label').forEach((l) => { l.hidden = !vs.includes(l.dataset.for); });
-        document.getElementById('ss-fields').hidden = f.socialSecurity.value !== 'si';
+        document.getElementById('ss-fields').hidden = !needsSocial();
       }
-      document.getElementById('collab-fields').addEventListener('change', syncCollab);
+      document.getElementById('pro-fields').addEventListener('change', syncCollab);
 
       // Documento: familiar responsable y colaborador. Datos del adulto mayor: solo el familiar.
       // Formación, pase y seguridad social: solo el colaborador.
       function syncRole() {
         const client = isClient();
         const collab = isCollab();
-        const title = client ? 'Datos del familiar responsable' : collab ? 'Datos del colaborador' : 'Sus datos';
+        const title = client ? 'Datos del familiar responsable' : collab ? 'Datos del colaborador' : 'Datos del cuidador';
         document.getElementById('self-title').textContent = (client ? '👨‍👩‍👧 ' : collab ? '🤝 ' : '🧑‍⚕️ ') + title;
         document.getElementById('self-legend').textContent = title;
         document.getElementById('self-doc').hidden = !needsDoc();
-        document.getElementById('collab-fields').hidden = !collab;
+        document.getElementById('pro-fields').hidden = client;
+        document.getElementById('doc-file').hidden = !collab;
+        const role = reg.elements.role.value;
+        reg.querySelectorAll('#pro-fields [data-roles]').forEach((el) => { el.hidden = !el.dataset.roles.split(' ').includes(role); });
         syncCollab();
         elderPanel.hidden = !client;
         if (!client) selfPanel.open = true; // que no quede abierto un panel oculto
@@ -321,7 +433,7 @@
       const fileBase64 = (file) => new Promise((resolve, reject) => {
         const r = new FileReader();
         r.onload = () => resolve(String(r.result).split(',')[1] || '');
-        r.onerror = () => reject(new Error('No se pudo leer el certificado.'));
+        r.onerror = () => reject(new Error(`No se pudo leer el archivo «${file.name}».`));
         r.readAsDataURL(file);
       });
 
@@ -331,6 +443,7 @@
         const role = f.elements.role.value;
         const client = role === 'cliente';
         const collab = role === 'colaborador';
+        const care = role === 'cuidador';
         if (!f.elements.name.value.trim()) return fieldError(selfPanel, 'name', 'Escriba su nombre y apellidos.');
         if (client || collab) {
           if (!f.docType.value) return fieldError(selfPanel, 'docType', 'Seleccione su tipo de documento.');
@@ -339,9 +452,10 @@
         if (!f.address.value.trim()) return fieldError(selfPanel, 'address', 'Escriba su dirección.');
         if (!PHONE.test(f.mobile.value.trim())) return fieldError(selfPanel, 'mobile', 'Escriba un número de celular válido.');
         if (!EMAIL.test(f.email.value.trim())) return fieldError(selfPanel, 'email', 'Escriba un correo electrónico válido.');
-        const cert = collab && f.socialSecurity.value === 'si' ? f.certificate.files[0] : null;
+        if (collab || care) {
+          if (!f.education.value) return fieldError(selfPanel, 'education', 'Seleccione su nivel de escolaridad.');
+        }
         if (collab) {
-          if (!f.education.value) return fieldError(selfPanel, 'education', 'Seleccione su grado de escolaridad.');
           if (!f.license.value) return fieldError(selfPanel, 'license', 'Indique si tiene pase de conducción.');
           if (f.license.value === 'si') {
             if (!f.licenseVehicle.value) return fieldError(selfPanel, 'licenseVehicle', 'Indique si su pase es para carro, moto o ambos.');
@@ -349,8 +463,14 @@
             if (missing.length) return fieldError(selfPanel, 'licenseCat', `Seleccione la categoría de su pase para ${missing.join(' y ')}.`);
           }
           if (!f.socialSecurity.value) return fieldError(selfPanel, 'socialSecurity', 'Indique si está afiliado a seguridad social como independiente.');
-          if (cert && cert.size > CERT_MAX) return fieldError(selfPanel, 'certificate', 'El certificado no puede pesar más de 2 MB.');
-          if (cert && !/\.(pdf|jpe?g|png)$/i.test(cert.name)) return fieldError(selfPanel, 'certificate', 'El certificado debe ser un PDF o una imagen JPG o PNG.');
+        }
+        if (care) {
+          const bad = titleProblem();
+          if (bad) return fieldError(selfPanel, bad.input, bad.msg);
+        }
+        for (const field of neededFiles()) { // en el orden del formulario
+          const problem = pdfProblem(field);
+          if (problem) return fieldError(selfPanel, field, problem);
         }
         if (client) {
           if (!f.elderName.value.trim()) return fieldError(elderPanel, 'elderName', 'Escriba el nombre completo del usuario (adulto mayor).');
@@ -368,14 +488,24 @@
           email: f.email.value.trim(), username: f.username.value.trim(), password: f.password.value, role,
         };
         if (client || collab) Object.assign(body, { docType: f.docType.value, document: f.document.value.trim() });
-        if (collab) {
-          Object.assign(body, {
-            education: f.education.value, license: f.license.value, socialSecurity: f.socialSecurity.value,
-            ...(f.license.value === 'si' ? { licenseVehicle: f.licenseVehicle.value, licenseCategories: checkedCats() } : {}),
-          });
-          if (cert) {
-            try { body.certificate = { name: cert.name, data: await fileBase64(cert) }; } catch (err) { return showError(f, err.message); }
+        if (collab || care) {
+          body.education = f.education.value;
+          if (collab) {
+            Object.assign(body, {
+              license: f.license.value, socialSecurity: f.socialSecurity.value,
+              ...(f.license.value === 'si' ? { licenseVehicle: f.licenseVehicle.value, licenseCategories: checkedCats() } : {}),
+            });
           }
+          try {
+            for (const field of neededFiles()) {
+              const file = f.elements[field].files[0];
+              body[field] = { name: file.name, data: await fileBase64(file) };
+            }
+            if (care) {
+              body.titlesFiles = [];
+              for (const { file } of chosenTitles()) body.titlesFiles.push({ name: file.name, data: await fileBase64(file) });
+            }
+          } catch (err) { return showError(f, err.message); }
         }
         if (client) {
           Object.assign(body, {

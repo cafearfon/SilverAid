@@ -8,9 +8,11 @@ Sirve la aplicación y una pequeña API. Los datos se guardan en tres tablas:
                  tipo_documento;documento  (familiar responsable y adulto mayor)
     caregivers   ficha personal de cada cuidador; disponibilidad como «lun=8,9,10|mar=14,15»
                  (día = horas de inicio de cada franja de 1 h, de 06:00 a 22:00)
-                 escolaridad;pase_conduccion;pase_vehiculo;pase_categorias;seguridad_social;certificado
-                 (ficha del colaborador)
-    certificates certificado de afiliación a salud que adjunta el colaborador (en base64)
+                 escolaridad;pase_conduccion;pase_vehiculo;pase_categorias;seguridad_social;certificado;
+                 adjunto_documento;adjunto_pase;adjunto_pension;adjunto_arl;adjunto_rut;adjunto_titulos;adjunto_rethus
+                 (ficha del colaborador y del cuidador; los adjuntos, nombre del archivo)
+    attachments  PDF que adjuntan colaboradores y cuidadores al registrarse (documento, pase, RUT, títulos,
+                 RETHUS y certificados de salud, pensión y ARL) en base64
     sos          registro de llamadas del botón de pánico
     services     catálogo de servicios que el administrador envía a los clientes
 
@@ -280,8 +282,12 @@ USERS = Table(
      # Último envío del catálogo de servicios al cliente: «fecha · canal»
      "catalogo_enviado",
      # Ficha del colaborador: escolaridad, pase de conducción (si/no, carro/moto/ambos, categorías
-     # «B1,A2») y afiliación a seguridad social como independiente (si/no; certificado = nombre del archivo)
-     "escolaridad", "pase_conduccion", "pase_vehiculo", "pase_categorias", "seguridad_social", "certificado"],
+     # «B1,A2») y afiliación a seguridad social como independiente (si/no). Los tres PDF adjuntos se
+     # guardan en ATTACHMENTS; aquí solo el nombre del archivo.
+     "escolaridad", "pase_conduccion", "pase_vehiculo", "pase_categorias", "seguridad_social", "certificado",
+     "adjunto_documento", "adjunto_pase", "adjunto_pension", "adjunto_arl",
+     # Ficha del cuidador (registro público): escolaridad, certificado y los PDF de RUT, títulos y RETHUS
+     "adjunto_rut", "adjunto_titulos", "adjunto_rethus"],
     seed=[("admin", ADMIN_PASSWORD, "Administrador", "admin", "activo", "", "")],
 )
 
@@ -294,10 +300,22 @@ EDUCATION = ("ninguno", "primaria", "bachillerato", "tecnico", "tecnologo", "uni
 # Categorías de licencia de conducción (Colombia) según el vehículo.
 LICENSE_CATEGORIES = {"moto": ("A1", "A2"), "carro": ("B1", "B2", "B3", "C1", "C2", "C3")}
 VEHICLES = {"carro": ("carro",), "moto": ("moto",), "ambos": ("carro", "moto")}
-CERT_MAX_BYTES = 2 * 1024 * 1024
-CERT_TYPES = {b"%PDF": ("application/pdf", "pdf"), b"\x89PNG": ("image/png", "png"), b"\xff\xd8\xff": ("image/jpeg", "jpg")}
+# PDF que adjuntan colaborador y cuidador: clase → (campo de la petición, columna en users, tamaño máximo en KB, descripción)
+ATTACHMENT_KINDS = {
+    "documento": ("documentFile", "adjunto_documento", 300, "su documento de identidad"),
+    "pase": ("licenseFile", "adjunto_pase", 300, "su pase de conducción"),
+    "salud": ("certificate", "certificado", 300, "el certificado de afiliación a salud"),
+    "pension": ("pensionFile", "adjunto_pension", 300, "el certificado de afiliación a pensión"),
+    "arl": ("arlFile", "adjunto_arl", 300, "el certificado de afiliación a la ARL"),
+    "rut": ("rutFile", "adjunto_rut", 300, "su RUT"),
+    "titulos": ("titlesFiles", "adjunto_titulos", 300, "su título"),  # lista: un PDF por título
+    "rethus": ("rethusFile", "adjunto_rethus", 300, "el certificado del RETHUS"),
+}
+MAX_TITLES = 5  # títulos que puede adjuntar un cuidador (clases «titulos-1» … «titulos-5»)
+# Roles que adjuntan PDF al registrarse.
+ATTACHMENT_ROLES = ("colaborador", "cuidador")
 
-CERTIFICATES = Table("certificates.txt", ["usuario", "nombre_archivo", "tipo", "fecha", "contenido"])
+ATTACHMENTS = Table("attachments.txt", ["id", "usuario", "clase", "nombre_archivo", "fecha", "contenido"])
 
 CAREGIVERS = Table(
     "caregivers.txt",
@@ -378,7 +396,16 @@ def public_user(u):
             "education": u.get("escolaridad", ""), "license": u.get("pase_conduccion", ""),
             "licenseVehicle": u.get("pase_vehiculo", ""),
             "licenseCategories": [c for c in u.get("pase_categorias", "").split(",") if c],
-            "socialSecurity": u.get("seguridad_social", ""), "certificate": u.get("certificado", "")}
+            "socialSecurity": u.get("seguridad_social", ""),
+            "attachments": user_attachments(u)}
+
+
+def user_attachments(u):
+    """{clase: nombre del archivo}. Los títulos se guardan como «a.pdf|b.pdf» y salen como titulos-1, titulos-2…"""
+    out = {k: u[col] for k, (_, col, _, _) in ATTACHMENT_KINDS.items() if k != "titulos" and u.get(col)}
+    titles = [t for t in (u.get("adjunto_titulos") or "").split("|") if t]
+    out.update({f"titulos-{i}": name for i, name in enumerate(titles, 1)})
+    return out
 
 
 def validate_document(doc_type, number, whose):
@@ -432,12 +459,14 @@ def elder_profile(data, users):
 
 
 def collaborator_profile(data):
-    """Valida la ficha del colaborador. Devuelve (campos, certificado o None, error)."""
+    """Valida la ficha del colaborador y sus PDF. Devuelve (campos, {clase: adjunto}, error)."""
     education = str(data.get("education") or "")
     if education not in EDUCATION:
         return None, None, "Seleccione su grado de escolaridad."
     fields = {"escolaridad": education, "pase_conduccion": "", "pase_vehiculo": "", "pase_categorias": "",
               "seguridad_social": ""}
+    fields.update({column: "" for _, column, _, _ in ATTACHMENT_KINDS.values()})
+    kinds = ["documento"]  # adjuntos obligatorios según las respuestas
     license_ = data.get("license")
     if license_ not in ("si", "no"):
         return None, None, "Indique si tiene pase de conducción."
@@ -453,37 +482,71 @@ def collaborator_profile(data):
             if not any(c in LICENSE_CATEGORIES[v] for c in chosen):
                 return None, None, f"Seleccione la categoría de su pase para {v}."
         fields.update(pase_vehiculo=vehicle, pase_categorias=",".join(chosen))
+        kinds.append("pase")
     social = data.get("socialSecurity")
     if social not in ("si", "no"):
         return None, None, "Indique si está afiliado a seguridad social como independiente."
     fields["seguridad_social"] = social
-    certificate = None
-    if social == "si" and data.get("certificate"):
-        certificate, error = decode_certificate(data["certificate"])
+    if social == "si":  # afiliado como independiente: salud, pensión y ARL
+        kinds += ["salud", "pension", "arl"]
+    return attach_files(data, fields, kinds)
+
+
+def caregiver_profile(data):
+    """Ficha del cuidador que se registra: escolaridad, títulos (opcionales, uno o varios), RUT, certificados de
+    salud, pensión y ARL como independiente y certificado del RETHUS. Devuelve (campos, {clase: adjunto}, error)."""
+    education = str(data.get("education") or "")
+    if education not in EDUCATION:
+        return None, None, "Seleccione su nivel de escolaridad."
+    fields = {"escolaridad": education, "seguridad_social": "si"}
+    fields.update({column: "" for _, column, _, _ in ATTACHMENT_KINDS.values()})
+    titles = data.get("titlesFiles") or []
+    if not isinstance(titles, list):
+        return None, None, "Los títulos adjuntos no son válidos."
+    if len(titles) > MAX_TITLES:
+        return None, None, f"Puede adjuntar como máximo {MAX_TITLES} títulos."
+    title_files = {}
+    for i, value in enumerate(titles, 1):
+        title, error = decode_pdf(value, "titulos")
+        if error:
+            return None, None, f"Título {i}: {error}"
+        title_files[f"titulos-{i}"] = {**title, "clase": f"titulos-{i}"}
+    fields, files, error = attach_files(data, fields, ["rut", "salud", "pension", "arl", "rethus"])
+    if error:
+        return None, None, error
+    fields["adjunto_titulos"] = "|".join(t["nombre_archivo"] for t in title_files.values())
+    return fields, {**title_files, **files}, None
+
+
+def attach_files(data, fields, kinds):
+    """Valida los PDF obligatorios de esas clases y anota su nombre en `fields`."""
+    files = {}
+    for kind in kinds:
+        key, column, _, _ = ATTACHMENT_KINDS[kind]
+        files[kind], error = decode_pdf(data.get(key), kind)
         if error:
             return None, None, error
-    return fields, certificate, None
+        fields[column] = files[kind]["nombre_archivo"]
+    return fields, files, None
 
 
-def decode_certificate(value):
-    """{name, data (base64)} → fila de CERTIFICATES sin usuario. Solo PDF, PNG o JPG de hasta 2 MB."""
+def decode_pdf(value, kind):
+    """{name, data (base64)} → fila de ATTACHMENTS sin usuario. Solo PDF, con el tamaño máximo de su clase."""
     import base64
     import binascii
-    if not isinstance(value, dict):
-        return None, "El certificado adjunto no es válido."
+    _, _, max_kb, what = ATTACHMENT_KINDS[kind]
+    if not isinstance(value, dict) or not value.get("data"):
+        return None, f"Adjunte {what} en PDF."
     try:
-        raw = base64.b64decode(str(value.get("data") or ""), validate=True)
+        raw = base64.b64decode(str(value["data"]), validate=True)
     except (binascii.Error, ValueError):
-        return None, "El certificado adjunto no es válido."
-    if not raw:
-        return None, "El certificado adjunto está vacío."
-    if len(raw) > CERT_MAX_BYTES:
-        return None, "El certificado no puede pesar más de 2 MB."
-    kind = next((t for magic, t in CERT_TYPES.items() if raw.startswith(magic)), None)
-    if not kind:
-        return None, "El certificado debe ser un PDF o una imagen JPG o PNG."
+        return None, f"El archivo con {what} no es válido."
+    if not raw.startswith(b"%PDF"):
+        return None, f"El archivo con {what} debe ser un PDF."
+    if len(raw) > max_kb * 1024:
+        return None, f"El PDF con {what} no puede pesar más de {max_kb} KB."
     stem = re.sub(r"[^\w\-. ]", "", Path(str(value.get("name") or "")).stem, flags=re.UNICODE).strip()[:60]
-    return {"nombre_archivo": f"{stem or 'certificado'}.{kind[1]}", "tipo": kind[0], "fecha": now(),
+    return {"clase": kind, "nombre_archivo": f"{stem or kind}.pdf", "fecha": now(),
             "contenido": base64.b64encode(raw).decode("ascii")}, None
 
 
@@ -547,19 +610,17 @@ def sign_up(data, role, registered_by=""):
         return None, "Escriba un número de celular válido (7 a 20 dígitos)."
     if not EMAIL_RE.match(extra["email"]):
         return None, "Escriba un correo electrónico válido."
-    elder = certificate = None
+    elder = files = None
     if role in DOCUMENT_ROLES:
         whose = "del familiar responsable" if role == "cliente" else "del colaborador"
         doc_type, doc, error = validate_document(data.get("docType"), data.get("document"), whose)
         if error:
             return None, error
         extra.update({"tipo_documento": doc_type, "documento": doc})
-    if role == "colaborador":
-        profile, certificate, error = collaborator_profile(data)
+    if role in ATTACHMENT_ROLES:
+        profile, files, error = (collaborator_profile if role == "colaborador" else caregiver_profile)(data)
         if error:
             return None, error
-        if certificate:
-            profile["certificado"] = certificate["nombre_archivo"]
         extra.update(profile)
     if role == "cliente":
         # Datos del adulto mayor a cargo del familiar responsable.
@@ -610,9 +671,10 @@ def sign_up(data, role, registered_by=""):
                 row.update(elder, rol="usuario", estado="pendiente", registrado_por=user["usuario"],
                            fecha_registro=now(), cliente=user["usuario"])
                 users.append(row)
-            if certificate:
-                certs = [c for c in CERTIFICATES.read() if c["usuario"].lower() != user["usuario"].lower()]
-                CERTIFICATES.write(certs + [{**certificate, "usuario": user["usuario"]}])
+            if files:
+                key = user["usuario"].lower()
+                rows = [a for a in ATTACHMENTS.read() if a["usuario"].lower() != key]
+                ATTACHMENTS.write(rows + [{**f, "id": f"{key}:{kind}", "usuario": user["usuario"]} for kind, f in files.items()])
             USERS.write(users)
     if error:
         return None, error
@@ -745,14 +807,15 @@ class Handler(SimpleHTTPRequestHandler):
                     rows = CAREGIVERS.read()
                 self.send_json(HTTPStatus.OK, {"caregivers": [full_caregiver(c) for c in rows]})
 
-        elif m := re.fullmatch(r"/api/admin/users/([^/]+)/certificate", path):
+        elif m := re.fullmatch(r"/api/admin/users/([^/]+)/attachments/([a-z]+(?:-[0-9]+)?)", path):
             if self.auth("admin"):
+                key = f"{m.group(1).lower()}:{m.group(2)}"
                 with lock:
-                    cert = next((c for c in CERTIFICATES.read() if c["usuario"].lower() == m.group(1).lower()), None)
-                if not cert:
-                    return self.fail(HTTPStatus.NOT_FOUND, "Ese colaborador no adjuntó certificado.")
-                self.send_json(HTTPStatus.OK, {"name": cert["nombre_archivo"], "type": cert["tipo"],
-                                               "date": cert["fecha"], "data": cert["contenido"]})
+                    doc = next((a for a in ATTACHMENTS.read() if a["id"] == key), None)
+                if not doc:
+                    return self.fail(HTTPStatus.NOT_FOUND, "Esa persona no adjuntó ese archivo.")
+                self.send_json(HTTPStatus.OK, {"name": doc["nombre_archivo"], "type": "application/pdf",
+                                               "date": doc["fecha"], "data": doc["contenido"]})
 
         elif path == "/api/admin/sos":
             if self.auth("admin"):
@@ -766,8 +829,8 @@ class Handler(SimpleHTTPRequestHandler):
     # --- POST
     def do_POST(self):
         path = self.clean_path()
-        # El registro puede traer el certificado de afiliación (2 MB en base64).
-        data = self.read_json(3_000_000 if path == "/api/register" else 20_000)
+        # El registro de colaboradores y cuidadores trae sus PDF (cuidador: hasta 5 + 5 × 300 KB, en base64).
+        data = self.read_json(4_500_000 if path == "/api/register" else 20_000)
         if data is None:
             return self.fail(HTTPStatus.BAD_REQUEST, "Petición no válida o demasiado grande.")
 
@@ -982,8 +1045,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.fail(HTTPStatus.NOT_FOUND, "El usuario no existe.")
                 users.remove(user)
                 USERS.write(users)
-                if user.get("certificado"):
-                    CERTIFICATES.write([c for c in CERTIFICATES.read() if c["usuario"].lower() != target.lower()])
+                if user["rol"] in ATTACHMENT_ROLES:
+                    ATTACHMENTS.write([a for a in ATTACHMENTS.read() if a["usuario"].lower() != target.lower()])
             drop_sessions(target)
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
@@ -1017,6 +1080,7 @@ class Handler(SimpleHTTPRequestHandler):
                     if account and account["rol"] == "cuidador":
                         users.remove(account)
                         USERS.write(users)
+                        ATTACHMENTS.write([a for a in ATTACHMENTS.read() if a["usuario"].lower() != cg["usuario"].lower()])
                         drop_sessions(cg["usuario"])
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
@@ -1135,7 +1199,7 @@ def main():
         wait_for_mysql()
     with lock:
         # Crea los archivos o tablas si no existen y actualiza los datos de versiones anteriores.
-        for table in (USERS, CAREGIVERS, SOS, SERVICES, CERTIFICATES):
+        for table in (USERS, CAREGIVERS, SOS, SERVICES, ATTACHMENTS):
             table.setup()
         users = read_users()
         for u in users:  # adultos mayores registrados por un cliente antes de existir el campo «cliente»

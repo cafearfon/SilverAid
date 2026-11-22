@@ -11,6 +11,10 @@
   const EDUCATION = { ninguno: 'Ninguno', primaria: 'Primaria', bachillerato: 'Bachillerato', tecnico: 'Técnico',
     tecnologo: 'Tecnólogo', universitario: 'Universitario', posgrado: 'Posgrado' };
   const VEHICLE = { carro: '🚗 Carro', moto: '🏍️ Moto', ambos: '🚗 Carro y 🏍️ moto' };
+  /** Botón para abrir un PDF adjunto de un colaborador o cuidador. */
+  const attachBtn = (c, kind, label) => (c.attachments?.[kind]
+    ? `<button class="btn ghost small" data-attach="${kind}" data-user="${esc(c.username)}" title="${esc(c.attachments[kind])}">📄 ${label}</button>`
+    : '');
   const POLL_MS = 10000;
 
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -140,6 +144,27 @@
     renderUsers();
     renderClients();
     renderCollaborators();
+    renderCaregiverSignups();
+  }
+
+  /** Cuidadores registrados desde «Crear cuenta»: escolaridad y PDF (RUT, seguridad social, RETHUS y cada título). */
+  function renderCaregiverSignups() {
+    const list = users.filter((u) => u.role === 'cuidador');
+    $('cg-signup-body').innerHTML = list.length
+      ? list.map((c) => `
+        <tr>
+          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span><span class="sub">Registro: ${fmt(c.registeredAt)}</span></td>
+          <td>${c.mobile ? `📱 ${esc(c.mobile)}` : '<span class="muted">Sin celular</span>'}${c.email ? `<span class="sub">${esc(c.email)}</span>` : ''}${c.address ? `<span class="sub">${esc(c.address)}</span>` : ''}</td>
+          <td>${EDUCATION[c.education] || '<span class="muted">—</span>'}</td>
+          <td><div class="attach-btns">${[['rut', 'RUT'], ['salud', 'Salud'], ['pension', 'Pensión'], ['arl', 'ARL'], ['rethus', 'RETHUS'],
+              ...Object.keys(c.attachments || {}).filter((k) => k.startsWith('titulos-')).map((k) => [k, 'Título ' + k.split('-')[1]])]
+            .map(([kind, label]) => attachBtn(c, kind, label)).join('') || '<span class="muted">Ninguno</span>'}</div></td>
+          <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span></td>
+          <td class="actions">${c.status === 'activo'
+            ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(c.username)}">Inactivar</button>`
+            : `<button class="btn ok small" data-status="activo" data-user="${esc(c.username)}">Activar</button>`}</td>
+        </tr>`).join('')
+      : '<tr><td colspan="6" class="empty">Ningún cuidador se ha registrado desde «Crear cuenta».</td></tr>';
   }
 
   /** Colaboradores: formación, pase de conducción y afiliación a seguridad social. */
@@ -148,16 +173,18 @@
     $('collab-body').innerHTML = list.length
       ? list.map((c) => `
         <tr>
-          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span>${docText(c)}<span class="sub">Registro: ${fmt(c.registeredAt)}</span></td>
+          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span>${docText(c)}<span class="sub">Registro: ${fmt(c.registeredAt)}</span>
+            <div class="attach-btns">${attachBtn(c, 'documento', 'Documento')}</div></td>
           <td>${c.mobile ? `📱 ${esc(c.mobile)}` : '<span class="muted">Sin celular</span>'}${c.email ? `<span class="sub">${esc(c.email)}</span>` : ''}${c.address ? `<span class="sub">${esc(c.address)}</span>` : ''}</td>
           <td>${EDUCATION[c.education] || '<span class="muted">—</span>'}</td>
           <td>${c.license === 'si'
-            ? `${VEHICLE[c.licenseVehicle] || ''}<span class="sub">Categoría: ${esc(c.licenseCategories.join(', ')) || '—'}</span>`
+            ? `${VEHICLE[c.licenseVehicle] || ''}<span class="sub">Categoría: ${esc(c.licenseCategories.join(', ')) || '—'}</span>
+               <div class="attach-btns">${attachBtn(c, 'pase', 'Ver pase')}</div>`
             : c.license === 'no' ? 'No tiene' : '<span class="muted">—</span>'}</td>
           <td>${c.socialSecurity === 'si'
-            ? `Afiliado como independiente${c.certificate
-              ? `<button class="btn ghost small" data-cert="${esc(c.username)}">📄 Ver certificado</button>`
-              : '<span class="sub">Sin certificado adjunto</span>'}`
+            ? `Afiliado como independiente<div class="attach-btns">${
+              (attachBtn(c, 'salud', 'Salud') + attachBtn(c, 'pension', 'Pensión') + attachBtn(c, 'arl', 'ARL'))
+              || '<span class="sub">Sin certificados adjuntos</span>'}</div>`
             : c.socialSecurity === 'no' ? 'No afiliado' : '<span class="muted">—</span>'}</td>
           <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span></td>
           <td class="actions">${c.status === 'activo'
@@ -167,14 +194,14 @@
       : '<tr><td colspan="7" class="empty">Todavía no hay colaboradores registrados.</td></tr>';
   }
 
-  /** Abre el certificado de afiliación en una pestaña nueva (la API exige el token, así que se descarga aquí). */
-  async function openCertificate(username, btn) {
+  /** Abre un PDF adjunto en una pestaña nueva (la API exige el token, así que se descarga aquí). */
+  async function openAttachment(username, kind, btn) {
     const tab = window.open('', '_blank'); // abrir antes del await para que el navegador no lo bloquee
     btn.disabled = true;
     try {
-      const cert = await api(`/api/admin/users/${encodeURIComponent(username)}/certificate`);
-      const bytes = Uint8Array.from(atob(cert.data), (ch) => ch.charCodeAt(0));
-      const url = URL.createObjectURL(new Blob([bytes], { type: cert.type }));
+      const doc = await api(`/api/admin/users/${encodeURIComponent(username)}/attachments/${kind}`);
+      const bytes = Uint8Array.from(atob(doc.data), (ch) => ch.charCodeAt(0));
+      const url = URL.createObjectURL(new Blob([bytes], { type: doc.type }));
       if (tab) tab.location.href = url; else location.href = url;
       setTimeout(() => URL.revokeObjectURL(url), 60000);
     } catch (err) {
@@ -454,9 +481,15 @@
       const b = e.target.closest('button[data-status]');
       if (b) setStatus(b.dataset.user, b.dataset.status);
     });
+    $('cg-signup-body').addEventListener('click', (e) => {
+      const att = e.target.closest('button[data-attach]');
+      if (att) return openAttachment(att.dataset.user, att.dataset.attach, att);
+      const b = e.target.closest('button[data-status]');
+      if (b) setStatus(b.dataset.user, b.dataset.status);
+    });
     $('collab-body').addEventListener('click', (e) => {
-      const cert = e.target.closest('button[data-cert]');
-      if (cert) return openCertificate(cert.dataset.cert, cert);
+      const att = e.target.closest('button[data-attach]');
+      if (att) return openAttachment(att.dataset.user, att.dataset.attach, att);
       const b = e.target.closest('button[data-status]');
       if (b) setStatus(b.dataset.user, b.dataset.status);
     });

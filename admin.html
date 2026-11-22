@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=3">
-  <script src="js/auth.js?v=3"></script>
+  <link rel="stylesheet" href="css/styles.css?v=7">
+  <script src="js/auth.js?v=7"></script>
   <script>
     (function () {
       const s = SAAuth.get();
@@ -211,6 +211,15 @@
         </table>
       </div>
 
+      <h2>Cuentas creadas desde «Crear cuenta»</h2>
+      <p class="muted small-text">Cuidadores que se registraron por su cuenta, con la documentación que adjuntaron.</p>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Cuidador</th><th>Contacto</th><th>Escolaridad</th><th>Documentos adjuntos</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody id="cg-signup-body"></tbody>
+        </table>
+      </div>
+
       <button class="btn" id="btn-toggle-cg" aria-expanded="false" aria-controls="cg-form-card">➕ Registrar cuidador</button>
 
       <article class="card cg-form-card" id="cg-form-card" hidden>
@@ -369,7 +378,7 @@
   </main>
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
-  <script src="js/availability.js?v=3"></script>
-  <script src="js/admin.js?v=3"></script>
+  <script src="js/availability.js?v=7"></script>
+  <script src="js/admin.js?v=7"></script>
 </body>
 </html>
