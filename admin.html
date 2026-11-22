@@ -9,8 +9,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=2">
-  <script src="js/auth.js?v=2"></script>
+  <link rel="stylesheet" href="css/styles.css?v=3">
+  <script src="js/auth.js?v=3"></script>
   <script>
     (function () {
       const s = SAAuth.get();
@@ -37,6 +37,7 @@
     <button data-tab="clients">👨‍👩‍👧 Clientes</button>
     <button data-tab="catalog">📋 Catálogo</button>
     <button data-tab="caregivers">🧑‍⚕️ Cuidadores</button>
+    <button data-tab="collaborators">🤝 Colaboradores</button>
     <button data-tab="pending">⏳ Altas pendientes <span class="count" id="count-pending" hidden></span></button>
     <button data-tab="sos">🚨 Llamadas SOS <span class="count" id="count-sos" hidden></span></button>
   </nav>
@@ -284,6 +285,18 @@
       </article>
     </section>
 
+    <!-- ============ COLABORADORES ============ -->
+    <section id="tab-collaborators" class="view">
+      <h1>🤝 Colaboradores</h1>
+      <p class="muted">Personas que se registran para acompañar a trámites y citas, llevar medicamentos, conducir y otros servicios.</p>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Colaborador</th><th>Contacto</th><th>Escolaridad</th><th>Pase de conducción</th><th>Seguridad social</th><th>Estado</th><th>Acciones</th></tr></thead>
+          <tbody id="collab-body"></tbody>
+        </table>
+      </div>
+    </section>
+
     <!-- ============ USUARIOS ============ -->
     <section id="tab-users" class="view">
       <h1>👥 Usuarios</h1>
@@ -356,7 +369,7 @@
   </main>
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
-  <script src="js/availability.js?v=2"></script>
-  <script src="js/admin.js?v=2"></script>
+  <script src="js/availability.js?v=3"></script>
+  <script src="js/admin.js?v=3"></script>
 </body>
 </html>

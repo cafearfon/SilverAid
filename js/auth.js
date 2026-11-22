@@ -49,6 +49,7 @@
       usuario: 'Adulto mayor',
       cliente: 'Familiar responsable',
       cuidador: 'Cuidador/a',
+      colaborador: 'Colaborador/a',
       admin: 'Administrador',
     },
 

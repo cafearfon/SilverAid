@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=2">
+  <link rel="stylesheet" href="css/styles.css?v=3">
 </head>
 <body class="login-page">
   <main class="login-wrap">
@@ -41,6 +41,7 @@
           <legend>Soy…</legend>
           <label><input type="radio" name="role" value="cliente" checked> <span><strong>👨‍👩‍👧 Familiar responsable</strong><small>Cuido de un familiar mayor</small></span></label>
           <label><input type="radio" name="role" value="cuidador"> <span><strong>🧑‍⚕️ Cuidador/a</strong><small>Ofrezco cuidados y acompañamiento</small></span></label>
+          <label><input type="radio" name="role" value="colaborador"> <span><strong>🤝 Colaborador/a</strong><small>Acompaño a trámites y citas, llevo medicamentos, conduzco…</small></span></label>
         </fieldset>
         <p class="small-text muted">¿Es usted un adulto mayor? Su familiar responsable crea su cuenta desde SilverAid.</p>
         <details class="reg-panel reg-details" id="self-panel" name="reg-datos" open>
@@ -66,6 +67,58 @@
           <label>Dirección * <input name="address" autocomplete="street-address" required maxlength="120" placeholder="Ej. Calle 10 # 5-20, Tunja"></label>
           <label>Celular * <input name="mobile" type="tel" autocomplete="tel" required maxlength="20" placeholder="Ej. 300 123 4567"></label>
           <label>Correo electrónico * <input name="email" type="email" autocomplete="email" required maxlength="80" placeholder="Ej. laura@correo.com"></label>
+
+          <div class="collab-fields" id="collab-fields" hidden>
+            <label>Grado de escolaridad *
+              <select name="education" required>
+                <option value="">Seleccione…</option>
+                <option value="ninguno">Ninguno</option>
+                <option value="primaria">Primaria</option>
+                <option value="bachillerato">Bachillerato</option>
+                <option value="tecnico">Técnico</option>
+                <option value="tecnologo">Tecnólogo</option>
+                <option value="universitario">Universitario</option>
+                <option value="posgrado">Posgrado</option>
+              </select>
+            </label>
+
+            <fieldset class="choice-group">
+              <legend>¿Tiene pase de conducción? *</legend>
+              <label><input type="radio" name="license" value="si"> Sí</label>
+              <label><input type="radio" name="license" value="no"> No</label>
+            </fieldset>
+            <div class="collab-sub" id="license-fields" hidden>
+              <fieldset class="choice-group">
+                <legend>¿Para qué vehículo? *</legend>
+                <label><input type="radio" name="licenseVehicle" value="carro"> 🚗 Carro</label>
+                <label><input type="radio" name="licenseVehicle" value="moto"> 🏍️ Moto</label>
+                <label><input type="radio" name="licenseVehicle" value="ambos"> Carro y moto</label>
+              </fieldset>
+              <fieldset class="choice-group" id="license-cats" hidden>
+                <legend>Categoría del pase *</legend>
+                <label data-for="moto"><input type="checkbox" name="licenseCat" value="A1"> A1</label>
+                <label data-for="moto"><input type="checkbox" name="licenseCat" value="A2"> A2</label>
+                <label data-for="carro"><input type="checkbox" name="licenseCat" value="B1"> B1</label>
+                <label data-for="carro"><input type="checkbox" name="licenseCat" value="B2"> B2</label>
+                <label data-for="carro"><input type="checkbox" name="licenseCat" value="B3"> B3</label>
+                <label data-for="carro"><input type="checkbox" name="licenseCat" value="C1"> C1</label>
+                <label data-for="carro"><input type="checkbox" name="licenseCat" value="C2"> C2</label>
+                <label data-for="carro"><input type="checkbox" name="licenseCat" value="C3"> C3</label>
+              </fieldset>
+            </div>
+
+            <fieldset class="choice-group">
+              <legend>¿Está afiliado a seguridad social como independiente? *</legend>
+              <label><input type="radio" name="socialSecurity" value="si"> Sí</label>
+              <label><input type="radio" name="socialSecurity" value="no"> No</label>
+            </fieldset>
+            <div class="collab-sub" id="ss-fields" hidden>
+              <label>Certificado de afiliación a salud (opcional)
+                <input name="certificate" type="file" accept="application/pdf,image/jpeg,image/png">
+              </label>
+              <p class="small-text muted">PDF, JPG o PNG de hasta 2 MB.</p>
+            </div>
+          </div>
           </fieldset>
         </details>
 
@@ -123,7 +176,7 @@
     <a href="index.html" class="back-link">← Volver a la página de inicio</a>
   </main>
 
-  <script src="js/auth.js?v=2"></script>
+  <script src="js/auth.js?v=3"></script>
   <script>
     (function () {
       const panels = { login: document.getElementById('panel-login'), register: document.getElementById('panel-register') };
@@ -158,13 +211,30 @@
       const elderPanel = document.getElementById('elder-panel');
       const regPanels = [selfPanel, elderPanel];
       const isClient = () => reg.elements.role.value === 'cliente';
+      const isCollab = () => reg.elements.role.value === 'colaborador';
+      const needsDoc = () => isClient() || isCollab();
+      const CERT_MAX = 2 * 1024 * 1024;
+      /** Vehículos del pase elegido ('ambos' = carro y moto). */
+      const vehicles = () => ({ carro: ['carro'], moto: ['moto'], ambos: ['carro', 'moto'] }[reg.elements.licenseVehicle.value] || []);
+      const checkedCats = () => [...reg.querySelectorAll('input[name="licenseCat"]:checked')]
+        .filter((c) => !c.closest('label').hidden).map((c) => c.value);
+      /** Vehículos del pase sin ninguna categoría marcada. */
+      const vehiclesWithoutCat = () => vehicles().filter((v) =>
+        !checkedCats().some((c) => reg.querySelector(`input[name="licenseCat"][value="${c}"]`).closest('label').dataset.for === v));
+      function collabMissing() {
+        const f = reg.elements;
+        let n = countMissing([f.education.value, f.license.value, f.socialSecurity.value]);
+        if (f.license.value === 'si') n += f.licenseVehicle.value ? vehiclesWithoutCat().length : 1;
+        return n;
+      }
       /** Tipo y número de documento cuentan como dos datos. */
       const docMissing = (type, num) => (!type ? 2 : docOk(type, num) ? 0 : 1);
       const countMissing = (checks) => checks.filter((ok) => !ok).length;
       function selfMissing() {
         const f = reg.elements;
         return countMissing([f.name.value.trim(), f.address.value.trim(), PHONE.test(f.mobile.value.trim()), EMAIL.test(f.email.value.trim())])
-          + (isClient() ? docMissing(f.docType.value, f.document.value) : 0);
+          + (needsDoc() ? docMissing(f.docType.value, f.document.value) : 0)
+          + (isCollab() ? collabMissing() : 0);
       }
       function elderMissing() {
         const f = reg.elements;
@@ -190,16 +260,34 @@
       /** Abre el panel del campo con error, lleva el cursor a él y muestra el aviso. */
       function fieldError(panel, field, msg) {
         panel.open = true;
-        reg.elements[field].focus();
+        const el = reg.elements[field];
+        (el.focus ? el : el[0]).focus(); // grupos de opciones: la primera
+
         return showError(reg, msg);
       }
 
-      // Documento y datos del adulto mayor: solo para el familiar responsable.
+      // Pase de conducción y seguridad social: cada respuesta «Sí» despliega sus datos.
+      function syncCollab() {
+        const f = reg.elements;
+        document.getElementById('license-fields').hidden = f.license.value !== 'si';
+        const vs = vehicles();
+        document.getElementById('license-cats').hidden = !vs.length;
+        reg.querySelectorAll('#license-cats label').forEach((l) => { l.hidden = !vs.includes(l.dataset.for); });
+        document.getElementById('ss-fields').hidden = f.socialSecurity.value !== 'si';
+      }
+      document.getElementById('collab-fields').addEventListener('change', syncCollab);
+
+      // Documento: familiar responsable y colaborador. Datos del adulto mayor: solo el familiar.
+      // Formación, pase y seguridad social: solo el colaborador.
       function syncRole() {
         const client = isClient();
-        document.getElementById('self-title').textContent = client ? '👨‍👩‍👧 Datos del familiar responsable' : '🧑‍⚕️ Sus datos';
-        document.getElementById('self-legend').textContent = client ? 'Datos del familiar responsable' : 'Sus datos';
-        document.getElementById('self-doc').hidden = !client;
+        const collab = isCollab();
+        const title = client ? 'Datos del familiar responsable' : collab ? 'Datos del colaborador' : 'Sus datos';
+        document.getElementById('self-title').textContent = (client ? '👨‍👩‍👧 ' : collab ? '🤝 ' : '🧑‍⚕️ ') + title;
+        document.getElementById('self-legend').textContent = title;
+        document.getElementById('self-doc').hidden = !needsDoc();
+        document.getElementById('collab-fields').hidden = !collab;
+        syncCollab();
         elderPanel.hidden = !client;
         if (!client) selfPanel.open = true; // que no quede abierto un panel oculto
         showError(reg, '');
@@ -229,19 +317,41 @@
         }
       });
 
+      /** Contenido del archivo en base64 (sin el prefijo «data:…;base64,»). */
+      const fileBase64 = (file) => new Promise((resolve, reject) => {
+        const r = new FileReader();
+        r.onload = () => resolve(String(r.result).split(',')[1] || '');
+        r.onerror = () => reject(new Error('No se pudo leer el certificado.'));
+        r.readAsDataURL(file);
+      });
+
       document.getElementById('form-register').addEventListener('submit', async (e) => {
         e.preventDefault();
         const f = e.target;
         const role = f.elements.role.value;
         const client = role === 'cliente';
+        const collab = role === 'colaborador';
         if (!f.elements.name.value.trim()) return fieldError(selfPanel, 'name', 'Escriba su nombre y apellidos.');
-        if (client) {
+        if (client || collab) {
           if (!f.docType.value) return fieldError(selfPanel, 'docType', 'Seleccione su tipo de documento.');
           if (!docOk(f.docType.value, f.document.value)) return fieldError(selfPanel, 'document', 'Revise su número de documento.');
         }
         if (!f.address.value.trim()) return fieldError(selfPanel, 'address', 'Escriba su dirección.');
         if (!PHONE.test(f.mobile.value.trim())) return fieldError(selfPanel, 'mobile', 'Escriba un número de celular válido.');
         if (!EMAIL.test(f.email.value.trim())) return fieldError(selfPanel, 'email', 'Escriba un correo electrónico válido.');
+        const cert = collab && f.socialSecurity.value === 'si' ? f.certificate.files[0] : null;
+        if (collab) {
+          if (!f.education.value) return fieldError(selfPanel, 'education', 'Seleccione su grado de escolaridad.');
+          if (!f.license.value) return fieldError(selfPanel, 'license', 'Indique si tiene pase de conducción.');
+          if (f.license.value === 'si') {
+            if (!f.licenseVehicle.value) return fieldError(selfPanel, 'licenseVehicle', 'Indique si su pase es para carro, moto o ambos.');
+            const missing = vehiclesWithoutCat();
+            if (missing.length) return fieldError(selfPanel, 'licenseCat', `Seleccione la categoría de su pase para ${missing.join(' y ')}.`);
+          }
+          if (!f.socialSecurity.value) return fieldError(selfPanel, 'socialSecurity', 'Indique si está afiliado a seguridad social como independiente.');
+          if (cert && cert.size > CERT_MAX) return fieldError(selfPanel, 'certificate', 'El certificado no puede pesar más de 2 MB.');
+          if (cert && !/\.(pdf|jpe?g|png)$/i.test(cert.name)) return fieldError(selfPanel, 'certificate', 'El certificado debe ser un PDF o una imagen JPG o PNG.');
+        }
         if (client) {
           if (!f.elderName.value.trim()) return fieldError(elderPanel, 'elderName', 'Escriba el nombre completo del usuario (adulto mayor).');
           if (!f.elderDocType.value) return fieldError(elderPanel, 'elderDocType', 'Seleccione el tipo de documento del usuario.');
@@ -257,9 +367,18 @@
           name: f.elements.name.value.trim(), address: f.address.value.trim(), mobile: f.mobile.value.trim(),
           email: f.email.value.trim(), username: f.username.value.trim(), password: f.password.value, role,
         };
+        if (client || collab) Object.assign(body, { docType: f.docType.value, document: f.document.value.trim() });
+        if (collab) {
+          Object.assign(body, {
+            education: f.education.value, license: f.license.value, socialSecurity: f.socialSecurity.value,
+            ...(f.license.value === 'si' ? { licenseVehicle: f.licenseVehicle.value, licenseCategories: checkedCats() } : {}),
+          });
+          if (cert) {
+            try { body.certificate = { name: cert.name, data: await fileBase64(cert) }; } catch (err) { return showError(f, err.message); }
+          }
+        }
         if (client) {
           Object.assign(body, {
-            docType: f.docType.value, document: f.document.value.trim(),
             elderName: f.elderName.value.trim(), elderDocType: f.elderDocType.value, elderDocument: f.elderDocument.value.trim(),
             elderAddress: f.elderAddress.value.trim(), elderMobile: f.elderMobile.value.trim(), elderEmail: f.elderEmail.value.trim(),
             elderBloodType: f.elderBloodType.value,
@@ -267,14 +386,14 @@
         }
         try {
           await SAAuth.api('/api/register', { method: 'POST', body });
-          enter(await SAAuth.api('/api/login', { method: 'POST', body }));
+          enter(await SAAuth.api('/api/login', { method: 'POST', body: { username: body.username, password: body.password } }));
         } catch (err) {
           showError(f, err.message);
         }
       });
 
-      // login.html#registro abre «Crear cuenta»; #registro-cliente o #registro-cuidador además elige el rol.
-      const m = location.hash.match(/^#registro(?:-(cliente|cuidador))?$/);
+      // login.html#registro abre «Crear cuenta»; #registro-cliente, -cuidador o -colaborador además elige el rol.
+      const m = location.hash.match(/^#registro(?:-(cliente|cuidador|colaborador))?$/);
       if (m) {
         show('register');
         if (m[1]) reg.querySelector(`input[name="role"][value="${m[1]}"]`).checked = true;

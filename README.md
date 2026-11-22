@@ -32,7 +32,7 @@ Usuario administrador por defecto: **admin / admin**.
 | Página | Para qué |
 |--------|----------|
 | `index.html` | Landing page pública: presentación, funciones, roles, cómo funciona y seguridad. Funciona también en GitHub Pages. |
-| `login.html` | Inicio de sesión y registro (`login.html#registro`, `#registro-cliente`, `#registro-cuidador` abren el registro con el rol elegido). |
+| `login.html` | Inicio de sesión y registro (`login.html#registro`, `#registro-cliente`, `#registro-cuidador`, `#registro-colaborador` abren el registro con el rol elegido). |
 | `app.html` | La aplicación (requiere sesión). |
 | `admin.html` | Administración (solo admin). |
 
@@ -47,9 +47,10 @@ Usuario administrador por defecto: **admin / admin**.
   | `usuario` | Adulto mayor |
   | `cliente` | Familiar responsable |
   | `cuidador` | Cuidador/a |
+  | `colaborador` | Colaborador/a: acompañamiento a trámites y citas, solicitar y llevar medicamentos, conductor, entre otros |
   | `admin` | Administrador |
 
-- Desde «Crear una cuenta» solo se registran **familiares responsables** (*cliente*: nombre y apellidos, dirección, celular, correo electrónico, usuario y contraseña) y **cuidadores** (*cuidador*: nombre y apellidos, dirección, celular, correo electrónico, usuario y contraseña). Los **adultos mayores** (*usuario*) los registra su familiar desde la aplicación (quedan pendientes de alta) o el administrador. Nunca se crean *admin* desde el registro.
+- Desde «Crear una cuenta» se registran **familiares responsables** (*cliente*: nombre y apellidos, dirección, celular, correo electrónico, usuario y contraseña) y **cuidadores** (*cuidador*: nombre y apellidos, dirección, celular, correo electrónico, usuario y contraseña) y **colaboradores** (*colaborador*: nombre y apellidos, documento de identidad, dirección, celular, correo electrónico, grado de escolaridad, pase de conducción —carro, moto o ambos, con su categoría A1–C3—, afiliación a seguridad social como independiente con certificado de salud opcional en PDF/JPG/PNG de hasta 2 MB, usuario y contraseña). Los **adultos mayores** (*usuario*) los registra su familiar desde la aplicación (quedan pendientes de alta) o el administrador. Nunca se crean *admin* desde el registro.
 - Estados de cuenta: `activo`, `pendiente` (esperando alta) e `inactivo`.
 
 ## Página de administración (`admin.html`)
@@ -61,6 +62,7 @@ Solo para el rol `admin` (al iniciar sesión como admin se abre directamente):
 | 👥 **Usuarios** | Adultos mayores (rol `usuario`), con filtro por estado y acciones **✏️ Editar**, **Inactivar**/Activar y Eliminar. El botón **➕ Crear usuario** despliega el formulario: nombre completo, dirección, teléfono, celular, correo (opcional), tipo de sangre, **cliente asociado** (debe existir antes) y usuario/contraseña de acceso. Es la pestaña que se abre por defecto. |
 | 👨‍👩‍👧 **Clientes** | Familiares responsables con los adultos mayores que han registrado y su estado; permite dar de alta a esos familiares y activar/desactivar al cliente. |
 | 🧑‍⚕️ **Cuidadores** | Lista de cuidadores registrados con botones **✏️ Editar** (abre el formulario con sus datos; si tiene cuenta se puede cambiar la contraseña, si no, crearla) y **Eliminar**. Debajo, el botón **➕ Registrar cuidador** que despliega el formulario: información personal, perfil, cuenta opcional (rol `cuidador`) y **disponibilidad semanal** en una matriz (días en columnas, una hora por fila de 06:00 a 22:00; clic o arrastre para marcar). La aplicación solo asigna un cuidador si está disponible ese día y hora. |
+| 🤝 **Colaboradores** | Colaboradores registrados: documento, contacto, escolaridad, pase de conducción, afiliación a seguridad social (botón **📄 Ver certificado** si lo adjuntaron) y **Inactivar**/Activar. |
 | ⏳ **Altas pendientes** | Adultos mayores que un cliente (familiar) registró desde la sección *Familia*. No pueden entrar hasta que el admin les da de alta (o rechaza la solicitud). |
 | 🚨 **Llamadas SOS** | Registro de cada pulsación del botón de pánico (y de caídas sin respuesta): fecha, persona, motivo y ubicación. Se actualiza cada 10 s, suena un aviso con cada llamada nueva (en cualquier pestaña) y se marcan como atendidas con una nota. |
 
@@ -68,7 +70,8 @@ Archivos de datos (en `data/`, fuera de git):
 
 | Archivo | Campos |
 |---------|--------|
-| `users.txt` | `usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;direccion;telefono;celular;email;tipo_sangre;cliente` (los seis últimos, ficha del adulto mayor) |
+| `users.txt` | `usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;direccion;telefono;celular;email;tipo_sangre;cliente;tipo_documento;documento;catalogo_enviado;escolaridad;pase_conduccion;pase_vehiculo;pase_categorias;seguridad_social;certificado` (de `direccion` a `cliente`, ficha del adulto mayor; los seis últimos, ficha del colaborador) |
+| `certificates.txt` | `usuario;nombre_archivo;tipo;fecha;contenido` — certificado de afiliación a salud del colaborador (contenido en base64) |
 | `caregivers.txt` | `id;nombre;documento;fecha_nacimiento;telefono;email;direccion;zona;titulo;experiencia;habilidades;disponibilidad;usuario;fecha_registro` — disponibilidad como `lun=8,9,10\|mar=14,15` (horas de inicio de cada franja de 1 h) |
 | `sos.txt` | `id;fecha;usuario;nombre;motivo;lat;lng;estado;atendido_por;fecha_atencion;nota` |
 - Cada usuario tiene sus propios datos de demo (medicamentos, citas, etc.) en el navegador.

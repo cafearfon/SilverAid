@@ -8,6 +8,9 @@ Sirve la aplicación y una pequeña API. Los datos se guardan en tres tablas:
                  tipo_documento;documento  (familiar responsable y adulto mayor)
     caregivers   ficha personal de cada cuidador; disponibilidad como «lun=8,9,10|mar=14,15»
                  (día = horas de inicio de cada franja de 1 h, de 06:00 a 22:00)
+                 escolaridad;pase_conduccion;pase_vehiculo;pase_categorias;seguridad_social;certificado
+                 (ficha del colaborador)
+    certificates certificado de afiliación a salud que adjunta el colaborador (en base64)
     sos          registro de llamadas del botón de pánico
     services     catálogo de servicios que el administrador envía a los clientes
 
@@ -19,7 +22,8 @@ Almacenamiento (variable STORAGE):
 Otras variables: HOST (127.0.0.1), PORT (8000), DATA_DIR (./data),
                  ADMIN_PASSWORD (contraseña inicial de «admin»; por defecto «admin»).
 
-Roles:   usuario (adulto mayor), cliente (familiar responsable), cuidador, admin.
+Roles:   usuario (adulto mayor), cliente (familiar responsable), cuidador, colaborador
+         (acompañamiento a trámites y citas, medicamentos, conductor…), admin.
 Estados: activo, pendiente (esperando alta del administrador), inactivo.
 
 Uso:  python server.py [puerto]
@@ -58,10 +62,12 @@ if STORAGE not in ("txt", "mysql"):
 PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "/usuario.html", "/favicon.ico"}
 PUBLIC_DIRS = ("/css/", "/js/", "/assets/")
 
-ROLES = ("usuario", "cliente", "cuidador", "admin")
-# Registro público: solo familiares responsables y cuidadores. Los adultos mayores los registra
+ROLES = ("usuario", "cliente", "cuidador", "colaborador", "admin")
+# Registro público: familiares responsables, cuidadores y colaboradores. Los adultos mayores los registra
 # su familiar (quedan pendientes de alta) o el administrador; nunca se crean admins desde aquí.
-SELF_SIGNUP_ROLES = ("cliente", "cuidador")
+SELF_SIGNUP_ROLES = ("cliente", "cuidador", "colaborador")
+# Rol que entrega su documento de identidad al registrarse.
+DOCUMENT_ROLES = ("cliente", "colaborador")
 LEGACY_ROLES = {"user": "usuario"}
 STATUSES = ("activo", "pendiente", "inactivo")
 SKILLS = ("compania", "compras", "tecnologia", "tramites")
@@ -171,6 +177,7 @@ class MySQLTable:
     """Tabla MySQL con una columna por campo (el primero es la clave primaria) y `orden` para conservar el orden."""
 
     LONG_FIELDS = {"disponibilidad", "nota", "direccion", "motivo", "descripcion"}
+    HUGE_FIELDS = {"contenido"}  # archivos adjuntos en base64 (hasta unos 3 MB)
 
     def __init__(self, filename, fields, seed=()):
         self.legacy = DATA / filename                       # .txt a importar la primera vez
@@ -183,6 +190,8 @@ class MySQLTable:
         col = self.cols[field]
         if i == 0:
             return f"`{col}` VARCHAR(64) NOT NULL PRIMARY KEY"
+        if field in self.HUGE_FIELDS:
+            return f"`{col}` LONGTEXT NULL"
         if field in self.LONG_FIELDS:  # MySQL no admite valor por defecto en TEXT
             return f"`{col}` TEXT NULL"
         return f"`{col}` VARCHAR(255) NOT NULL DEFAULT ''"
@@ -269,7 +278,10 @@ USERS = Table(
      # Documento de identidad (familiar responsable y adulto mayor)
      "tipo_documento", "documento",
      # Último envío del catálogo de servicios al cliente: «fecha · canal»
-     "catalogo_enviado"],
+     "catalogo_enviado",
+     # Ficha del colaborador: escolaridad, pase de conducción (si/no, carro/moto/ambos, categorías
+     # «B1,A2») y afiliación a seguridad social como independiente (si/no; certificado = nombre del archivo)
+     "escolaridad", "pase_conduccion", "pase_vehiculo", "pase_categorias", "seguridad_social", "certificado"],
     seed=[("admin", ADMIN_PASSWORD, "Administrador", "admin", "activo", "", "")],
 )
 
@@ -278,6 +290,14 @@ DOC_TYPES = {"CC": "Cédula de ciudadanía", "CE": "Cédula de extranjería",
 BLOOD_TYPES = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
 PHONE_RE = re.compile(r"^[0-9+()\-\s]{7,20}$")
 EMAIL_RE = re.compile(r"^[^@\s;]+@[^@\s;]+\.[^@\s;]+$")
+EDUCATION = ("ninguno", "primaria", "bachillerato", "tecnico", "tecnologo", "universitario", "posgrado")
+# Categorías de licencia de conducción (Colombia) según el vehículo.
+LICENSE_CATEGORIES = {"moto": ("A1", "A2"), "carro": ("B1", "B2", "B3", "C1", "C2", "C3")}
+VEHICLES = {"carro": ("carro",), "moto": ("moto",), "ambos": ("carro", "moto")}
+CERT_MAX_BYTES = 2 * 1024 * 1024
+CERT_TYPES = {b"%PDF": ("application/pdf", "pdf"), b"\x89PNG": ("image/png", "png"), b"\xff\xd8\xff": ("image/jpeg", "jpg")}
+
+CERTIFICATES = Table("certificates.txt", ["usuario", "nombre_archivo", "tipo", "fecha", "contenido"])
 
 CAREGIVERS = Table(
     "caregivers.txt",
@@ -354,7 +374,11 @@ def public_user(u):
             "address": u.get("direccion", ""), "phone": u.get("telefono", ""), "mobile": u.get("celular", ""),
             "email": u.get("email", ""), "bloodType": u.get("tipo_sangre", ""), "client": u.get("cliente", ""),
             "docType": u.get("tipo_documento", ""), "document": u.get("documento", ""),
-            "hasPassword": bool(u.get("contraseña")), "catalogSent": u.get("catalogo_enviado", "")}
+            "hasPassword": bool(u.get("contraseña")), "catalogSent": u.get("catalogo_enviado", ""),
+            "education": u.get("escolaridad", ""), "license": u.get("pase_conduccion", ""),
+            "licenseVehicle": u.get("pase_vehiculo", ""),
+            "licenseCategories": [c for c in u.get("pase_categorias", "").split(",") if c],
+            "socialSecurity": u.get("seguridad_social", ""), "certificate": u.get("certificado", "")}
 
 
 def validate_document(doc_type, number, whose):
@@ -407,6 +431,62 @@ def elder_profile(data, users):
             "tipo_sangre": blood, "cliente": client["usuario"]}, None
 
 
+def collaborator_profile(data):
+    """Valida la ficha del colaborador. Devuelve (campos, certificado o None, error)."""
+    education = str(data.get("education") or "")
+    if education not in EDUCATION:
+        return None, None, "Seleccione su grado de escolaridad."
+    fields = {"escolaridad": education, "pase_conduccion": "", "pase_vehiculo": "", "pase_categorias": "",
+              "seguridad_social": ""}
+    license_ = data.get("license")
+    if license_ not in ("si", "no"):
+        return None, None, "Indique si tiene pase de conducción."
+    fields["pase_conduccion"] = license_
+    if license_ == "si":
+        vehicle = data.get("licenseVehicle")
+        if vehicle not in VEHICLES:
+            return None, None, "Indique si su pase es para carro, moto o ambos."
+        categories = data.get("licenseCategories") or []
+        allowed = [c for v in VEHICLES[vehicle] for c in LICENSE_CATEGORIES[v]]
+        chosen = [c for c in allowed if c in categories]  # en orden y sin repetidos
+        for v in VEHICLES[vehicle]:
+            if not any(c in LICENSE_CATEGORIES[v] for c in chosen):
+                return None, None, f"Seleccione la categoría de su pase para {v}."
+        fields.update(pase_vehiculo=vehicle, pase_categorias=",".join(chosen))
+    social = data.get("socialSecurity")
+    if social not in ("si", "no"):
+        return None, None, "Indique si está afiliado a seguridad social como independiente."
+    fields["seguridad_social"] = social
+    certificate = None
+    if social == "si" and data.get("certificate"):
+        certificate, error = decode_certificate(data["certificate"])
+        if error:
+            return None, None, error
+    return fields, certificate, None
+
+
+def decode_certificate(value):
+    """{name, data (base64)} → fila de CERTIFICATES sin usuario. Solo PDF, PNG o JPG de hasta 2 MB."""
+    import base64
+    import binascii
+    if not isinstance(value, dict):
+        return None, "El certificado adjunto no es válido."
+    try:
+        raw = base64.b64decode(str(value.get("data") or ""), validate=True)
+    except (binascii.Error, ValueError):
+        return None, "El certificado adjunto no es válido."
+    if not raw:
+        return None, "El certificado adjunto está vacío."
+    if len(raw) > CERT_MAX_BYTES:
+        return None, "El certificado no puede pesar más de 2 MB."
+    kind = next((t for magic, t in CERT_TYPES.items() if raw.startswith(magic)), None)
+    if not kind:
+        return None, "El certificado debe ser un PDF o una imagen JPG o PNG."
+    stem = re.sub(r"[^\w\-. ]", "", Path(str(value.get("name") or "")).stem, flags=re.UNICODE).strip()[:60]
+    return {"nombre_archivo": f"{stem or 'certificado'}.{kind[1]}", "tipo": kind[0], "fecha": now(),
+            "contenido": base64.b64encode(raw).decode("ascii")}, None
+
+
 def public_caregiver(c):
     return {"id": c["id"], "name": c["nombre"], "zone": c["zona"], "title": c["titulo"],
             "experience": int(c["experiencia"] or 0), "skills": [s for s in c["habilidades"].split(",") if s],
@@ -456,9 +536,9 @@ def new_account(users, data, role, status, registered_by=""):
 
 
 def sign_up(data, role, registered_by=""):
-    """Alta de un familiar responsable (con su adulto mayor, pendiente de alta) o de un cuidador.
+    """Alta de un familiar responsable (con su adulto mayor, pendiente de alta), de un cuidador o de un colaborador.
     La usan el registro público y el administrador. Devuelve (cuenta, error)."""
-    # Familiar responsable y cuidador: dirección, celular y correo obligatorios.
+    # Todos los roles del registro: dirección, celular y correo obligatorios.
     extra = {"direccion": clean(data.get("address"), 120), "celular": clean(data.get("mobile"), 20),
              "email": clean(data.get("email"), 80)}
     if not extra["direccion"]:
@@ -467,13 +547,22 @@ def sign_up(data, role, registered_by=""):
         return None, "Escriba un número de celular válido (7 a 20 dígitos)."
     if not EMAIL_RE.match(extra["email"]):
         return None, "Escriba un correo electrónico válido."
-    elder = None
-    if role == "cliente":
-        # Documento del familiar responsable y datos del adulto mayor a su cargo.
-        doc_type, doc, error = validate_document(data.get("docType"), data.get("document"), "del familiar responsable")
+    elder = certificate = None
+    if role in DOCUMENT_ROLES:
+        whose = "del familiar responsable" if role == "cliente" else "del colaborador"
+        doc_type, doc, error = validate_document(data.get("docType"), data.get("document"), whose)
         if error:
             return None, error
         extra.update({"tipo_documento": doc_type, "documento": doc})
+    if role == "colaborador":
+        profile, certificate, error = collaborator_profile(data)
+        if error:
+            return None, error
+        if certificate:
+            profile["certificado"] = certificate["nombre_archivo"]
+        extra.update(profile)
+    if role == "cliente":
+        # Datos del adulto mayor a cargo del familiar responsable.
         elder_name = str(data.get("elderName") or "").strip()
         error = validate_name(elder_name) and "Escriba el nombre completo del usuario (adulto mayor)."
         if error:
@@ -497,10 +586,10 @@ def sign_up(data, role, registered_by=""):
     with lock:
         users = read_users()
         error = None
-        if role == "cliente":
-            if document_owner(users, extra["tipo_documento"], extra["documento"]):
-                error = "Ya hay una cuenta registrada con su documento de identidad."
-            elif document_owner(users, elder["tipo_documento"], elder["documento"]):
+        if role in DOCUMENT_ROLES and document_owner(users, extra["tipo_documento"], extra["documento"]):
+            error = "Ya hay una cuenta registrada con su documento de identidad."
+        elif role == "cliente":
+            if document_owner(users, elder["tipo_documento"], elder["documento"]):
                 error = "Ese adulto mayor ya está registrado en SilverAid."
             else:
                 # El adulto mayor entra con su número de documento; la contraseña se la asigna el administrador.
@@ -521,6 +610,9 @@ def sign_up(data, role, registered_by=""):
                 row.update(elder, rol="usuario", estado="pendiente", registrado_por=user["usuario"],
                            fecha_registro=now(), cliente=user["usuario"])
                 users.append(row)
+            if certificate:
+                certs = [c for c in CERTIFICATES.read() if c["usuario"].lower() != user["usuario"].lower()]
+                CERTIFICATES.write(certs + [{**certificate, "usuario": user["usuario"]}])
             USERS.write(users)
     if error:
         return None, error
@@ -563,9 +655,9 @@ class Handler(SimpleHTTPRequestHandler):
     def fail(self, status, message):
         self.send_json(status, {"error": message})
 
-    def read_json(self):
+    def read_json(self, limit=20_000):
         length = int(self.headers.get("Content-Length") or 0)
-        if length > 20_000:
+        if length > limit:
             return None
         try:
             data = json.loads(self.rfile.read(length) or b"{}")
@@ -653,6 +745,15 @@ class Handler(SimpleHTTPRequestHandler):
                     rows = CAREGIVERS.read()
                 self.send_json(HTTPStatus.OK, {"caregivers": [full_caregiver(c) for c in rows]})
 
+        elif m := re.fullmatch(r"/api/admin/users/([^/]+)/certificate", path):
+            if self.auth("admin"):
+                with lock:
+                    cert = next((c for c in CERTIFICATES.read() if c["usuario"].lower() == m.group(1).lower()), None)
+                if not cert:
+                    return self.fail(HTTPStatus.NOT_FOUND, "Ese colaborador no adjuntó certificado.")
+                self.send_json(HTTPStatus.OK, {"name": cert["nombre_archivo"], "type": cert["tipo"],
+                                               "date": cert["fecha"], "data": cert["contenido"]})
+
         elif path == "/api/admin/sos":
             if self.auth("admin"):
                 with lock:
@@ -665,9 +766,10 @@ class Handler(SimpleHTTPRequestHandler):
     # --- POST
     def do_POST(self):
         path = self.clean_path()
-        data = self.read_json()
+        # El registro puede traer el certificado de afiliación (2 MB en base64).
+        data = self.read_json(3_000_000 if path == "/api/register" else 20_000)
         if data is None:
-            return self.fail(HTTPStatus.BAD_REQUEST, "Petición no válida.")
+            return self.fail(HTTPStatus.BAD_REQUEST, "Petición no válida o demasiado grande.")
 
         if path == "/api/login":
             return self.login(data)
@@ -680,7 +782,8 @@ class Handler(SimpleHTTPRequestHandler):
             role = data.get("role")
             if role not in SELF_SIGNUP_ROLES:
                 return self.fail(HTTPStatus.BAD_REQUEST,
-                                 "Elija «Familiar responsable» o «Cuidador/a». Las cuentas de adultos mayores las crea su familiar.")
+                                 "Elija «Familiar responsable», «Cuidador/a» o «Colaborador/a». "
+                                 "Las cuentas de adultos mayores las crea su familiar.")
             user, error = sign_up(data, role)
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
@@ -879,6 +982,8 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.fail(HTTPStatus.NOT_FOUND, "El usuario no existe.")
                 users.remove(user)
                 USERS.write(users)
+                if user.get("certificado"):
+                    CERTIFICATES.write([c for c in CERTIFICATES.read() if c["usuario"].lower() != target.lower()])
             drop_sessions(target)
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
@@ -1030,7 +1135,7 @@ def main():
         wait_for_mysql()
     with lock:
         # Crea los archivos o tablas si no existen y actualiza los datos de versiones anteriores.
-        for table in (USERS, CAREGIVERS, SOS, SERVICES):
+        for table in (USERS, CAREGIVERS, SOS, SERVICES, CERTIFICATES):
             table.setup()
         users = read_users()
         for u in users:  # adultos mayores registrados por un cliente antes de existir el campo «cliente»
