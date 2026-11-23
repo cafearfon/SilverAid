@@ -138,8 +138,13 @@
     const slot = document.querySelector('.topbar .a11y, .lp-actions');
     if (slot && !slot.querySelector('[data-install]')) {
       const b = document.createElement('button');
-      b.type = 'button'; b.className = slot.matches('.lp-actions') ? 'btn ghost' : 'chip';
-      b.dataset.install = ''; b.hidden = true; b.textContent = '📲 Instalar';
+      const landing = slot.matches('.lp-actions');
+      b.type = 'button'; b.className = landing ? 'btn ghost lp-install' : 'chip';
+      b.dataset.install = ''; b.hidden = true;
+      if (landing) { // en la portada el texto se oculta cuando no cabe; el nombre accesible se mantiene
+        b.innerHTML = '<span aria-hidden="true">📲</span> <span class="lp-install-text">Instalar</span>';
+        b.setAttribute('aria-label', 'Instalar SilverAid'); b.title = 'Instalar SilverAid';
+      } else b.textContent = '📲 Instalar';
       slot.prepend(b);
     }
     const card = document.querySelector('.login-wrap');
