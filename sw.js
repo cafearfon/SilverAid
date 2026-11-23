@@ -11,7 +11,7 @@
    Al publicar cambios en páginas o scripts, suba VERSION (y el ?v= de los HTML) para renovar las cachés. */
 importScripts('js/db.js?v=10');
 
-const VERSION = 'v10';
+const VERSION = 'v11';
 const STATIC = `sa-static-${VERSION}`;
 const PAGES = `sa-pages-${VERSION}`;
 const API = 'sa-api';
