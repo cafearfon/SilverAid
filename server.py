@@ -36,6 +36,7 @@ Estados: activo, pendiente (esperando alta del administrador), inactivo y verifi
 Uso:  python server.py [puerto]
 """
 import base64
+import hashlib
 import json
 import os
 import posixpath
@@ -905,7 +906,33 @@ class Handler(SimpleHTTPRequestHandler):
             return None
         return user
 
+    # Validación por contenido (ETag) y no por fecha: con la fecha, un clon nuevo del repositorio puede tener
+    # archivos "más antiguos" que la copia del navegador, que recibiría 304 y seguiría con la versión vieja.
+    _etags = {}
+
+    def send_head(self):
+        path = self.translate_path(self.path)
+        if os.path.isdir(path):
+            path = os.path.join(path, "index.html")
+        if os.path.isfile(path):
+            st = os.stat(path)
+            key = (path, st.st_mtime_ns, st.st_size)
+            etag = Handler._etags.get(key)
+            if etag is None:
+                etag = '"%s"' % hashlib.sha1(Path(path).read_bytes()).hexdigest()[:20]
+                Handler._etags[key] = etag
+            self._etag = etag
+            if self.headers.get("If-None-Match") == etag:
+                self.send_response(HTTPStatus.NOT_MODIFIED)
+                self.end_headers()
+                return None
+            del self.headers["If-Modified-Since"]  # nunca 304 por fecha
+        return super().send_head()
+
     def end_headers(self):
+        if getattr(self, "_etag", None):
+            self.send_header("ETag", self._etag)
+            self._etag = None
         # Páginas, estilos y scripts: el navegador debe comprobar si cambiaron (si no, responde 304),
         # para que nunca muestre una versión antigua después de actualizar SilverAid.
         if not self.path.startswith("/api/"):
