@@ -765,11 +765,11 @@ def drop_sessions(username):
 class Handler(SimpleHTTPRequestHandler):
     extensions_map = {
         **SimpleHTTPRequestHandler.extensions_map,
-        ".js": "text/javascript",
-        ".css": "text/css",
+        ".js": "text/javascript; charset=utf-8",
+        ".css": "text/css; charset=utf-8",
         ".svg": "image/svg+xml",
         ".html": "text/html; charset=utf-8",
-        ".webmanifest": "application/manifest+json",
+        ".webmanifest": "application/manifest+json; charset=utf-8",
         ".png": "image/png",
     }
 
