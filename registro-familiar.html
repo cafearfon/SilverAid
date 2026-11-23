@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=11">
+  <link rel="stylesheet" href="css/styles.css?v=12">
 </head>
 <body class="login-page">
   <main class="login-wrap wizard-wrap">
@@ -24,8 +24,8 @@
     </a>
 
     <section class="card login-card">
-      <h1 id="reg-title">👨‍👩‍👧 Registro de familiar responsable</h1>
-      <p class="muted small-text" id="reg-intro">Cree su cuenta y registre a la persona mayor a su cargo. Su cuenta queda activa al momento; la del adulto mayor, pendiente hasta que SilverAid la revise.</p>
+      <h1 id="reg-title">🧾 Registro de cliente</h1>
+      <p class="muted small-text" id="reg-intro">Usted contrata SilverAid y registra a la persona mayor a su cargo. Su cuenta queda activa al momento; la del adulto mayor, pendiente hasta que SilverAid la revise.</p>
       <form id="reg-form" class="form wizard" novalidate>
         <ol class="steps" id="steps" aria-hidden="true"></ol>
         <p class="sr-only" id="step-label" aria-live="polite"></p>
@@ -52,17 +52,27 @@
         </section>
 
         <section class="step" data-title="Adulto mayor" hidden>
-          <label class="check-field" hidden><input type="checkbox" name="selfElder"> <span><strong>¿Usted es el adulto mayor?</strong>
-            <small class="muted">Márquelo si se registra a sí mismo: tendrá su cuenta de familiar responsable y también la de adulto mayor.</small></span></label>
+          <input type="checkbox" name="selfElder" hidden>
           <div class="info-box" id="self-elder-note" hidden>
             Usaremos sus datos del paso anterior. Como adulto mayor entrará con su <b>número de documento</b> y la <b>misma contraseña</b>, cuando SilverAid revise y active esa cuenta.
           </div>
+          <!-- Familiar responsable: se une a un adulto mayor ya registrado por su cliente -->
+          <div class="step-group" id="join-fields" hidden>
+            <p class="info-box small-text">Escriba el documento del adulto mayor. Su cliente (quien contrata SilverAid) recibirá su solicitud y, al aprobarla, podrá acompañarle desde la aplicación.</p>
+            <label>Su parentesco con el adulto mayor *
+              <select name="relation">
+                <option value="">Seleccione…</option>
+                <option>Hijo/a</option><option>Nieto/a</option><option>Cónyuge o pareja</option><option>Hermano/a</option>
+                <option>Sobrino/a</option><option>Otro familiar</option><option>Amigo/a o vecino/a</option>
+              </select>
+            </label>
+          </div>
           <div class="step-group" id="elder-fields">
-          <p class="small-text muted">La persona mayor a su cargo. Entrará con su número de documento; la contraseña se la asigna el administrador al darle de alta.</p>
-          <label>Nombre completo * <input name="elderName" required maxlength="80" placeholder="Ej. Carmen Ruiz de Gómez"></label>
+          <p class="small-text muted" id="elder-help">La persona mayor a su cargo. Entrará con su número de documento; la contraseña se la asigna el administrador al darle de alta.</p>
+          <label class="elder-full">Nombre completo * <input name="elderName" maxlength="80" placeholder="Ej. Carmen Ruiz de Gómez"></label>
           <div class="form-row">
-            <label>Tipo de documento *
-              <select name="elderDocType" required>
+            <label>Tipo de documento del adulto mayor *
+              <select name="elderDocType">
                 <option value="">Seleccione…</option>
                 <option value="CC">Cédula de ciudadanía</option>
                 <option value="CE">Cédula de extranjería</option>
@@ -70,16 +80,16 @@
                 <option value="PPT">Permiso por protección temporal</option>
               </select>
             </label>
-            <label>Número de documento * <input name="elderDocument" inputmode="numeric" required maxlength="20" placeholder="Ej. 23456789"></label>
+            <label>Número de documento del adulto mayor * <input name="elderDocument" inputmode="numeric" maxlength="20" placeholder="Ej. 23456789"></label>
           </div>
-          <label>Dirección * <input name="elderAddress" required maxlength="120" placeholder="Ej. Carrera 9 # 20-15, Tunja"></label>
-          <div class="form-row">
-            <label>Celular * <input name="elderMobile" type="tel" required maxlength="20" placeholder="Ej. 310 765 4321"></label>
+          <label class="elder-full">Dirección * <input name="elderAddress" maxlength="120" placeholder="Ej. Carrera 9 # 20-15, Tunja"></label>
+          <div class="form-row elder-full">
+            <label>Celular * <input name="elderMobile" type="tel" maxlength="20" placeholder="Ej. 310 765 4321"></label>
             <label>Correo electrónico (opcional) <input name="elderEmail" type="email" maxlength="80" placeholder="Ej. carmen@correo.com"></label>
           </div>
           </div>
-          <label>Tipo de sangre *
-            <select name="elderBloodType" required>
+          <label id="blood-field">Tipo de sangre *
+            <select name="elderBloodType">
               <option value="">Seleccione…</option>
               <option>O+</option><option>O-</option><option>A+</option><option>A-</option>
               <option>B+</option><option>B-</option><option>AB+</option><option>AB-</option>
@@ -117,22 +127,35 @@
       const f = document.getElementById('reg-form').elements;
       const { PHONE, EMAIL, docOk } = SAReg;
       const v = (name) => f[name].value.trim();
+      const $ = (id) => document.getElementById(id);
       const self = () => f.selfElder.checked;
-
-      // registro-familiar.html?para=mi: el adulto mayor se registra a sí mismo. Es su propio cliente
-      // (familiar responsable) y del paso «Adulto mayor» solo falta el tipo de sangre.
-      if (new URLSearchParams(location.search).get('para') === 'mi') {
+      // Tres registros con este formulario:
+      //   (sin parámetro)   cliente: contrata y registra a su adulto mayor (queda pendiente de alta)
+      //   ?para=mi          adulto mayor que se registra a sí mismo: es su propio cliente; solo falta el tipo de sangre
+      //   ?para=familiar    familiar responsable: se une a un adulto mayor ya registrado (solicitud al cliente)
+      const mode = new URLSearchParams(location.search).get('para');
+      const joining = mode === 'familiar';
+      const intro = (icon, title, text) => {
+        document.title = 'SilverAid — ' + title;
+        $('reg-title').textContent = `${icon} ${title}`;
+        $('reg-intro').textContent = text;
+      };
+      if (mode === 'mi') {
         f.selfElder.checked = true;
-        document.title = 'SilverAid — Registro de adulto mayor';
-        document.getElementById('reg-title').textContent = '👵 Registro de adulto mayor';
-        document.getElementById('reg-intro').textContent = 'Cree su cuenta para usar SilverAid usted mismo. Podrá entrar de inmediato; sus servicios como adulto mayor se activan cuando SilverAid revise su registro.';
+        intro('👵', 'Registro de adulto mayor', 'Cree su cuenta para usar SilverAid usted mismo. Podrá entrar de inmediato; sus servicios como adulto mayor se activan cuando SilverAid revise su registro.');
         document.querySelector('.step[data-title="Adulto mayor"]').dataset.title = 'Su salud';
-        document.getElementById('elder-fields').hidden = true;
-        document.getElementById('self-elder-note').hidden = false;
+        $('elder-fields').hidden = true;
+        $('self-elder-note').hidden = false;
+      } else if (joining) {
+        intro('👨‍👩‍👧', 'Registro de familiar responsable', 'Únase a la familia de un adulto mayor que ya está en SilverAid. Su cuenta queda activa al momento; podrá acompañarle cuando su cliente apruebe la solicitud.');
+        $('join-fields').hidden = false;
+        $('elder-help').hidden = true;
+        $('blood-field').hidden = true;
+        document.querySelectorAll('.elder-full').forEach((el) => { el.hidden = true; });
       }
 
       SAReg.init({
-        role: 'cliente',
+        role: joining ? 'familiar' : 'cliente',
         steps: [
           () => {
             if (!v('name')) return { field: 'name', msg: 'Escriba su nombre y apellidos.' };
@@ -145,9 +168,11 @@
           },
           () => {
             if (self()) return f.elderBloodType.value ? null : { field: 'elderBloodType', msg: 'Seleccione su tipo de sangre.' };
-            if (!v('elderName')) return { field: 'elderName', msg: 'Escriba el nombre completo del adulto mayor.' };
+            if (joining && !f.relation.value) return { field: 'relation', msg: 'Seleccione su parentesco con el adulto mayor.' };
+            if (!joining && !v('elderName')) return { field: 'elderName', msg: 'Escriba el nombre completo del adulto mayor.' };
             if (!f.elderDocType.value) return { field: 'elderDocType', msg: 'Seleccione el tipo de documento del adulto mayor.' };
             if (!docOk(f.elderDocType.value, f.elderDocument.value)) return { field: 'elderDocument', msg: 'Revise el número de documento del adulto mayor.' };
+            if (joining) return null;
             if (!v('elderAddress')) return { field: 'elderAddress', msg: 'Escriba la dirección del adulto mayor.' };
             if (!PHONE.test(v('elderMobile'))) return { field: 'elderMobile', msg: 'Escriba un celular válido para el adulto mayor.' };
             if (!f.elderBloodType.value) return { field: 'elderBloodType', msg: 'Seleccione el tipo de sangre del adulto mayor.' };
@@ -158,6 +183,7 @@
         async body() {
           const own = { name: v('name'), docType: f.docType.value, document: v('document'), address: v('address'), mobile: v('mobile'), email: v('email') };
           if (self()) return { ...own, selfElder: true, elderBloodType: f.elderBloodType.value };
+          if (joining) return { ...own, relation: f.relation.value, elderDocType: f.elderDocType.value, elderDocument: v('elderDocument') };
           return {
             ...own,
             elderName: v('elderName'), elderDocType: f.elderDocType.value, elderDocument: v('elderDocument'),

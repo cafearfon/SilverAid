@@ -5,7 +5,7 @@ Sirve la aplicación y una pequeña API. Los datos se guardan en tres tablas:
 
     users        usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;
                  direccion;telefono;celular;email;tipo_sangre;cliente  (ficha del adulto mayor);
-                 tipo_documento;documento  (familiar responsable y adulto mayor)
+                 tipo_documento;documento  (cliente, familiar responsable y adulto mayor)
     caregivers   ficha personal de cada cuidador; disponibilidad como «lun=8,9,10|mar=14,15»
                  (día = horas de inicio de cada franja de 1 h, de 06:00 a 22:00)
                  escolaridad;pase_conduccion;pase_vehiculo;pase_categorias;seguridad_social;certificado;
@@ -14,18 +14,21 @@ Sirve la aplicación y una pequeña API. Los datos se guardan en tres tablas:
     states       datos de la aplicación de cada usuario (JSON en base64), sincronizados desde IndexedDB
     attachments  PDF que adjuntan colaboradores y cuidadores al registrarse (documento, pase, RUT, títulos,
                  RETHUS y certificados de salud, pensión y ARL) en base64
+    family       familiares responsables de cada adulto mayor: «adulto» ↔ «familiar» (cuenta de rol familiar),
+                 parentesco y estado (activo o pendiente de aprobación). El cliente (users.cliente) va aparte
     sos          registro de llamadas del botón de pánico
     services     catálogo de servicios que el administrador envía a los clientes
 
 Almacenamiento (variable STORAGE):
-    txt    (por defecto) archivos de texto en DATA_DIR: users.txt, caregivers.txt, sos.txt, services.txt
+    txt    (por defecto) archivos de texto en DATA_DIR: users.txt, caregivers.txt, family.txt, sos.txt, services.txt
     mysql  base de datos MySQL (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE).
            Al crear las tablas por primera vez se importan los .txt de DATA_DIR si existen.
 
 Otras variables: HOST (127.0.0.1), PORT (8000), DATA_DIR (./data),
                  ADMIN_PASSWORD (contraseña inicial de «admin»; por defecto «admin»).
 
-Roles:   usuario (adulto mayor), cliente (familiar responsable), cuidador, colaborador
+Roles:   usuario (adulto mayor), cliente (contrata y registra al adulto mayor), familiar (familiar responsable),
+         cuidador, colaborador
          (acompañamiento a trámites y citas, medicamentos, conductor…), admin.
 Estados: activo, pendiente (esperando alta del administrador), inactivo y verificacion (cuidador o colaborador
          recién registrado: puede entrar solo para subir sus documentos hasta que el administrador lo active).
@@ -70,12 +73,12 @@ PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "
                 "/manifest.webmanifest", "/sw.js", "/offline.html"}
 PUBLIC_DIRS = ("/css/", "/js/", "/assets/")
 
-ROLES = ("usuario", "cliente", "cuidador", "colaborador", "admin")
-# Registro público: familiares responsables, cuidadores y colaboradores. Los adultos mayores los registra
-# su familiar (quedan pendientes de alta) o el administrador; nunca se crean admins desde aquí.
-SELF_SIGNUP_ROLES = ("cliente", "cuidador", "colaborador")
+ROLES = ("usuario", "cliente", "familiar", "cuidador", "colaborador", "admin")
+# Registro público: clientes (registran a su adulto mayor, o a sí mismos como adulto mayor), familiares responsables
+# (se unen a un adulto mayor ya registrado), cuidadores y colaboradores. Nunca se crean admins desde aquí.
+SELF_SIGNUP_ROLES = ("cliente", "familiar", "cuidador", "colaborador")
 # Rol que entrega su documento de identidad al registrarse.
-DOCUMENT_ROLES = ("cliente", "colaborador")
+DOCUMENT_ROLES = ("cliente", "familiar", "colaborador")
 LEGACY_ROLES = {"user": "usuario"}
 STATUSES = ("activo", "pendiente", "inactivo", "verificacion")
 SKILLS = ("compania", "compras", "tecnologia", "tramites")
@@ -283,7 +286,7 @@ USERS = Table(
     ["usuario", "contraseña", "nombre", "rol", "estado", "registrado_por", "fecha_registro",
      # Ficha del adulto mayor (rol usuario); vacía para el resto de roles
      "direccion", "telefono", "celular", "email", "tipo_sangre", "cliente",
-     # Documento de identidad (familiar responsable y adulto mayor)
+     # Documento de identidad (cliente, familiar responsable, colaborador y adulto mayor)
      "tipo_documento", "documento",
      # Último envío del catálogo de servicios al cliente: «fecha · canal»
      "catalogo_enviado",
@@ -387,6 +390,65 @@ SOS = Table(
     "sos.txt",
     ["id", "fecha", "usuario", "nombre", "motivo", "lat", "lng", "estado", "atendido_por", "fecha_atencion", "nota"],
 )
+
+
+# Familiares responsables de cada adulto mayor (rol «familiar», distinto del cliente). El adulto mayor tiene un solo
+# cliente (users.cliente: contrata, recibe el catálogo y gestiona la familia) y puede tener varios familiares
+# responsables con cuenta propia. El familiar se registra con el documento del adulto mayor y queda «pendiente»
+# hasta que el cliente o el administrador lo aprueben; el cliente o el administrador también pueden añadirlo.
+FAMILY = Table("family.txt", ["id", "adulto", "familiar", "parentesco", "estado", "solicitado_por", "fecha"])
+
+
+def link_id(elder, member):
+    return f"{elder.lower()}:{member.lower()}"
+
+
+def set_link(links, elder, member, status, by, relation=""):
+    """Crea o actualiza el enlace adulto mayor ↔ familiar. Un enlace activo nunca vuelve a pendiente."""
+    row = next((r for r in links if r["id"] == link_id(elder, member)), None)
+    if not row:
+        row = {"id": link_id(elder, member), "adulto": elder, "familiar": member, "parentesco": "",
+               "estado": status, "solicitado_por": by, "fecha": now()}
+        links.append(row)
+    elif status == "activo":
+        row["estado"] = "activo"
+    if relation:
+        row["parentesco"] = clean(relation, 40)
+    return row
+
+
+def drop_links(links, username):
+    """Quita los enlaces de un adulto mayor o de un familiar (al eliminar su cuenta)."""
+    key = username.lower()
+    return [r for r in links if key not in (r["adulto"].lower(), r["familiar"].lower())]
+
+
+def elder_family(users, links, elder, active_only=False):
+    """Familiares responsables de un adulto mayor (rol familiar): primero los activos y luego las solicitudes."""
+    out = []
+    for r in links:
+        if r["adulto"].lower() != elder["usuario"].lower() or (active_only and r["estado"] != "activo"):
+            continue
+        member = find_user(users, r["familiar"])
+        if not member or member["rol"] != "familiar":
+            continue
+        out.append({"username": member["usuario"], "name": member["nombre"], "relation": r["parentesco"],
+                    "status": r["estado"], "accountStatus": member["estado"],
+                    "mobile": member.get("celular", ""), "email": member.get("email", ""),
+                    "requestedBy": r["solicitado_por"], "date": r["fecha"]})
+    out.sort(key=lambda m: (m["status"] != "activo", m["name"].lower()))
+    return out
+
+
+def emergency_contacts(users, links, elder):
+    """A quién avisar en un SOS: el cliente (si no es el propio adulto mayor) y los familiares activos."""
+    out = []
+    client = find_user(users, elder.get("cliente", ""))
+    if client and not (client.get("documento") and client.get("documento") == elder.get("documento")):
+        out.append({"name": client["nombre"], "relation": "Cliente", "mobile": client.get("celular", ""), "client": True})
+    out += [{"name": m["name"], "relation": m["relation"], "mobile": m["mobile"], "client": False}
+            for m in elder_family(users, links, elder, active_only=True)]
+    return out
 
 
 def read_users():
@@ -632,66 +694,79 @@ def new_account(users, data, role, status, registered_by=""):
 
 
 def sign_up(data, role, registered_by=""):
-    """Alta de un familiar responsable (con su adulto mayor, pendiente de alta), de un cuidador o de un colaborador.
-    La usan el registro público y el administrador. Devuelve (cuenta, error)."""
+    """Alta de un cliente (con su adulto mayor, pendiente de alta), de un familiar responsable (que pide unirse a un
+    adulto mayor ya registrado), de un cuidador o de un colaborador. La usan el registro público y el administrador
+    (registered_by). Devuelve (cuenta, error, adulto mayor al que se unió el familiar o None)."""
     # Todos los roles del registro: dirección, celular y correo obligatorios.
     extra = {"direccion": clean(data.get("address"), 120), "celular": clean(data.get("mobile"), 20),
              "email": clean(data.get("email"), 80)}
     if not extra["direccion"]:
-        return None, "Escriba su dirección."
+        return None, "Escriba su dirección.", None
     if not PHONE_RE.match(extra["celular"]):
-        return None, "Escriba un número de celular válido (7 a 20 dígitos)."
+        return None, "Escriba un número de celular válido (7 a 20 dígitos).", None
     if not EMAIL_RE.match(extra["email"]):
-        return None, "Escriba un correo electrónico válido."
-    elder = files = None
+        return None, "Escriba un correo electrónico válido.", None
+    elder = files = joined = None
     if role in DOCUMENT_ROLES:
-        whose = "del familiar responsable" if role == "cliente" else "del colaborador"
+        whose = {"cliente": "del cliente", "familiar": "del familiar responsable"}.get(role, "del colaborador")
         doc_type, doc, error = validate_document(data.get("docType"), data.get("document"), whose)
         if error:
-            return None, error
+            return None, error, None
         extra.update({"tipo_documento": doc_type, "documento": doc})
     if role in ATTACHMENT_ROLES:
         profile, files, error = (collaborator_profile if role == "colaborador" else caregiver_profile)(data)
         if error:
-            return None, error
+            return None, error, None
         extra.update(profile)
+    if role == "familiar" and not (registered_by and data.get("joinElder")):
+        # El familiar indica el documento del adulto mayor al que quiere unirse (el administrador, su usuario).
+        j_type, j_doc, error = validate_document(data.get("elderDocType"), data.get("elderDocument"), "del adulto mayor")
+        if error:
+            return None, error, None
     if role == "cliente":
-        # Datos del adulto mayor a cargo del familiar responsable.
+        # Datos del adulto mayor que registra el cliente.
         if data.get("selfElder"):
-            # El familiar responsable es también el adulto mayor: su ficha usa sus propios datos.
+            # El cliente es también el adulto mayor: su ficha usa sus propios datos.
             data = {**data, "elderName": data.get("name"), "elderDocType": doc_type, "elderDocument": doc,
                     "elderAddress": extra["direccion"], "elderMobile": extra["celular"], "elderEmail": extra["email"]}
         elder_name = str(data.get("elderName") or "").strip()
         error = validate_name(elder_name) and "Escriba el nombre completo del usuario (adulto mayor)."
         if error:
-            return None, error
+            return None, error, None
         e_type, e_doc, error = validate_document(data.get("elderDocType"), data.get("elderDocument"), "del usuario")
         if error:
-            return None, error
+            return None, error, None
         if (e_type, e_doc) == (doc_type, doc) and not data.get("selfElder"):
-            return None, "El documento del usuario no puede ser el mismo que el del familiar responsable."
+            return None, "El documento del usuario no puede ser el mismo que el del cliente.", None
         elder = {"nombre": elder_name[:80], "tipo_documento": e_type, "documento": e_doc,
                  "direccion": clean(data.get("elderAddress"), 120), "celular": clean(data.get("elderMobile"), 20),
                  "email": clean(data.get("elderEmail"), 80), "tipo_sangre": str(data.get("elderBloodType") or "")}
         if not elder["direccion"]:
-            return None, "Escriba la dirección del usuario (adulto mayor)."
+            return None, "Escriba la dirección del usuario (adulto mayor).", None
         if not PHONE_RE.match(elder["celular"]):
-            return None, "Escriba un celular válido para el usuario (7 a 20 dígitos)."
+            return None, "Escriba un celular válido para el usuario (7 a 20 dígitos).", None
         if elder["tipo_sangre"] not in BLOOD_TYPES:
-            return None, "Seleccione el tipo de sangre del usuario."
+            return None, "Seleccione el tipo de sangre del usuario.", None
         if elder["email"] and not EMAIL_RE.match(elder["email"]):
-            return None, "El correo electrónico del usuario no es válido."
+            return None, "El correo electrónico del usuario no es válido.", None
     with lock:
         users = read_users()
         error = None
         if role in DOCUMENT_ROLES and document_owner(users, extra["tipo_documento"], extra["documento"]):
             error = "Ya hay una cuenta registrada con su documento de identidad."
+        elif role == "familiar":
+            joined = (find_user(users, str(data.get("joinElder"))) if registered_by and data.get("joinElder")
+                      else document_owner(users, j_type, j_doc))
+            if not joined or joined["rol"] != "usuario":
+                error = ("No encontramos a ningún adulto mayor registrado con ese documento. Pídale a su cliente "
+                         "(quien contrata SilverAid) que lo registre primero.")
         elif role == "cliente":
             if document_owner(users, elder["tipo_documento"], elder["documento"]):
-                error = "Ese adulto mayor ya está registrado en SilverAid."
+                error = ("Ese adulto mayor ya está registrado en SilverAid. Si es su familiar, regístrese como "
+                         "«Familiar responsable».")
             else:
                 # El adulto mayor entra con su número de documento; la contraseña se la asigna el administrador
-                # (si es el mismo familiar responsable, usa la misma contraseña de su cuenta).
+                # (si es el mismo cliente, usa la misma contraseña de su cuenta).
                 own = str(data.get("username", "")).strip().lower()
                 names = (elder["documento"].lower(), (elder["tipo_documento"] + elder["documento"]).lower())
                 elder["usuario"] = next((n for n in names if n != own and not find_user(users, n)), None)
@@ -715,14 +790,20 @@ def sign_up(data, role, registered_by=""):
                 row.update(elder, rol="usuario", estado="pendiente", registrado_por=user["usuario"],
                            fecha_registro=now(), cliente=user["usuario"])
                 users.append(row)
+            if joined:
+                # Solicitud para unirse a la familia (activa si lo registra el administrador).
+                links = FAMILY.read()
+                set_link(links, joined["usuario"], user["usuario"], "activo" if registered_by else "pendiente",
+                         registered_by or user["usuario"], str(data.get("relation") or ""))
+                FAMILY.write(links)
             if files:
                 key = user["usuario"].lower()
                 rows = [a for a in ATTACHMENTS.read() if a["usuario"].lower() != key]
                 ATTACHMENTS.write(rows + [{**f, "id": f"{key}:{kind}", "usuario": user["usuario"]} for kind, f in files.items()])
             USERS.write(users)
     if error:
-        return None, error
-    return user, None
+        return None, error, None
+    return user, None, joined
 
 
 def read_state(username):
@@ -864,18 +945,49 @@ class Handler(SimpleHTTPRequestHandler):
                 self.send_json(HTTPStatus.OK, {"caregivers": [public_caregiver(c) for c in rows]})
 
         elif path == "/api/elders":
-            client = self.auth("cliente")
-            if client:
+            # Cliente: sus adultos mayores, cada uno con sus familiares responsables (y las solicitudes por aprobar).
+            # Familiar: los adultos mayores a los que está unido y sus solicitudes enviadas.
+            user = self.auth()
+            if not user:
+                return
+            if user["rol"] not in ("cliente", "familiar"):
+                return self.fail(HTTPStatus.FORBIDDEN, "No tiene permiso para hacer esto.")
+            key = user["usuario"].lower()
+            with lock:
+                users, links = read_users(), FAMILY.read()
+            elders, requests = [], []
+            if user["rol"] == "cliente":
+                elders = [{**public_user(u), "family": elder_family(users, links, u)}
+                          for u in users if u["rol"] == "usuario" and u["cliente"].lower() == key]
+            else:
+                mine = {r["adulto"].lower(): r for r in links if r["familiar"].lower() == key}
+                for u in users:
+                    link = mine.get(u["usuario"].lower())
+                    if u["rol"] != "usuario" or not link:
+                        continue
+                    if link["estado"] != "activo":
+                        requests.append({"elder": u["nombre"], "date": link["fecha"]})
+                        continue
+                    client = find_user(users, u["cliente"])
+                    elders.append({**public_user(u), "relation": link["parentesco"],
+                                   "clientName": client["nombre"] if client else "",
+                                   "family": elder_family(users, links, u, active_only=True)})
+            self.send_json(HTTPStatus.OK, {"elders": elders, "requests": requests})
+
+        elif path == "/api/me/family":
+            # Contactos de emergencia del adulto mayor: su cliente y sus familiares responsables activos.
+            user = self.auth("usuario")
+            if user:
                 with lock:
-                    mine = [u for u in read_users() if client["usuario"].lower()
-                            in (u["registrado_por"].lower(), u["cliente"].lower())]
-                self.send_json(HTTPStatus.OK, {"elders": [public_user(u) for u in mine]})
+                    contacts = emergency_contacts(read_users(), FAMILY.read(), user)
+                self.send_json(HTTPStatus.OK, {"family": contacts})
 
         elif path == "/api/admin/users":
             if self.auth("admin"):
                 with lock:
-                    users = read_users()
-                self.send_json(HTTPStatus.OK, {"users": [public_user(u) for u in users]})
+                    users, links = read_users(), FAMILY.read()
+                family = {u["usuario"]: elder_family(users, links, u) for u in users if u["rol"] == "usuario"}
+                self.send_json(HTTPStatus.OK, {"users": [public_user(u) for u in users], "family": family})
 
         elif path == "/api/admin/services":
             if self.auth("admin"):
@@ -902,8 +1014,12 @@ class Handler(SimpleHTTPRequestHandler):
         elif path == "/api/admin/sos":
             if self.auth("admin"):
                 with lock:
-                    rows = SOS.read()
-                self.send_json(HTTPStatus.OK, {"calls": [public_call(s) for s in reversed(rows)]})
+                    rows, users, links = SOS.read(), read_users(), FAMILY.read()
+                calls = []
+                for s in reversed(rows):  # con el cliente y los familiares a quienes avisar
+                    elder = find_user(users, s["usuario"])
+                    calls.append({**public_call(s), "family": emergency_contacts(users, links, elder) if elder else []})
+                self.send_json(HTTPStatus.OK, {"calls": calls})
 
         else:
             self.fail(HTTPStatus.NOT_FOUND, "Ruta no encontrada.")
@@ -930,11 +1046,11 @@ class Handler(SimpleHTTPRequestHandler):
             role = data.get("role")
             if role not in SELF_SIGNUP_ROLES:
                 return self.fail(HTTPStatus.BAD_REQUEST,
-                                 "Elija «Adulto mayor», «Familiar responsable», «Cuidador/a» o «Colaborador/a».")
-            user, error = sign_up(data, role)
+                                 "Elija «Adulto mayor», «Cliente», «Familiar responsable», «Cuidador/a» o «Colaborador/a».")
+            user, error, joined = sign_up(data, role)
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
-            return self.send_json(HTTPStatus.CREATED, {"user": public_user(user)})
+            return self.send_json(HTTPStatus.CREATED, {"user": public_user(user), "joinRequested": bool(joined)})
 
         if path == "/api/elders":
             # Un cliente (familiar) registra a su adulto mayor; queda pendiente de alta.
@@ -945,11 +1061,37 @@ class Handler(SimpleHTTPRequestHandler):
                 users = read_users()
                 user, error = new_account(users, data, "usuario", "pendiente", client["usuario"])
                 if user:
-                    user["cliente"] = client["usuario"]  # queda asociado al familiar que lo registró
+                    user["cliente"] = client["usuario"]  # el cliente que lo registra
                     USERS.write(users)
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
             return self.send_json(HTTPStatus.CREATED, {"user": public_user(user)})
+
+        m = re.fullmatch(r"/api/admin/users/([^/]+)/holder", path)
+        if m:
+            # El administrador cambia el cliente del adulto mayor.
+            admin = self.auth("admin")
+            if not admin:
+                return
+            with lock:
+                users, links = read_users(), FAMILY.read()
+                elder = find_user(users, m.group(1))
+                client = find_user(users, str(data.get("client") or ""))
+                if not elder or elder["rol"] != "usuario":
+                    return self.fail(HTTPStatus.NOT_FOUND, "El adulto mayor no existe.")
+                if not client or client["rol"] != "cliente":
+                    return self.fail(HTTPStatus.BAD_REQUEST, "Seleccione un cliente registrado.")
+                elder["cliente"] = client["usuario"]
+                USERS.write(users)
+                family = elder_family(users, links, elder)
+            return self.send_json(HTTPStatus.OK, {"family": family})
+
+        m = re.fullmatch(r"/api/(admin/users|elders)/([^/]+)/family(?:/([^/]+)/approve)?", path)
+        if m:
+            actor = self.auth("admin" if m.group(1) == "admin/users" else "cliente")
+            if actor:
+                self.change_family(actor, m.group(2), "approve" if m.group(3) else "add", m.group(3), data)
+            return
 
         if path == "/api/sos":
             user = self.auth()
@@ -989,10 +1131,22 @@ class Handler(SimpleHTTPRequestHandler):
             admin = self.auth("admin")
             if not admin:
                 return
-            user, error = sign_up(data, "cliente", admin["usuario"])
+            user, error, _ = sign_up({**data, "joinElder": ""}, "cliente", admin["usuario"])
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
             return self.send_json(HTTPStatus.CREATED, {"user": public_user(user)})
+
+        if path == "/api/admin/family-members":
+            # El administrador crea un familiar responsable unido (activo) a un adulto mayor ya registrado.
+            admin = self.auth("admin")
+            if not admin:
+                return
+            if not data.get("joinElder"):
+                return self.fail(HTTPStatus.BAD_REQUEST, "Elija el adulto mayor.")
+            user, error, joined = sign_up(data, "familiar", admin["usuario"])
+            if error:
+                return self.fail(HTTPStatus.BAD_REQUEST, error)
+            return self.send_json(HTTPStatus.CREATED, {"user": public_user(user), "joined": joined["nombre"]})
 
         m = re.fullmatch(r"/api/admin/users/([^/]+)/catalog", path)
         if m:
@@ -1128,6 +1282,14 @@ class Handler(SimpleHTTPRequestHandler):
         m = re.fullmatch(r"/api/me/documents/titulos-([0-9]+)", path)
         if m:
             return self.delete_title(int(m.group(1)))
+        m = re.fullmatch(r"/api/(admin/users|elders)/([^/]+)/family/([^/]+)", path)
+        if m:
+            actor = self.auth("admin" if m.group(1) == "admin/users" else None)
+            if actor and actor["rol"] not in ("admin", "cliente", "familiar"):
+                return self.fail(HTTPStatus.FORBIDDEN, "No tiene permiso para hacer esto.")
+            if actor:
+                self.change_family(actor, m.group(2), "remove", m.group(3))
+            return
         m = re.fullmatch(r"/api/admin/users/([^/]+)", path)
         if m:
             admin = self.auth("admin")
@@ -1141,8 +1303,15 @@ class Handler(SimpleHTTPRequestHandler):
                 user = find_user(users, target)
                 if not user:
                     return self.fail(HTTPStatus.NOT_FOUND, "El usuario no existe.")
+                held = [u["nombre"] for u in users if u["rol"] == "usuario" and u is not user
+                        and u["cliente"].lower() == target.lower()]
+                if held:
+                    return self.fail(HTTPStatus.BAD_REQUEST,
+                                     f"{user['nombre']} es el cliente de {', '.join(held)}. Asigne otro cliente "
+                                     "(pestaña «Familiares responsables» o Usuarios → Editar) antes de eliminar su cuenta.")
                 users.remove(user)
                 USERS.write(users)
+                FAMILY.write(drop_links(FAMILY.read(), target))
                 if user["rol"] in ATTACHMENT_ROLES:
                     ATTACHMENTS.write([a for a in ATTACHMENTS.read() if a["usuario"].lower() != target.lower()])
                 STATES.write([r for r in STATES.read() if r["usuario"] != target.lower()])
@@ -1200,6 +1369,50 @@ class Handler(SimpleHTTPRequestHandler):
         token = secrets.token_urlsafe(32)
         sessions[token] = user["usuario"].lower()
         self.send_json(HTTPStatus.OK, {"token": token, "user": public_user(user)})
+
+    def change_family(self, actor, elder_name, action, member_name=None, data=None):
+        """Familiares responsables de un adulto mayor: añadir («add»), aprobar una solicitud («approve») o quitar
+        («remove»). Puede el administrador y el cliente del adulto mayor; un familiar también puede quitarse."""
+        is_admin = actor["rol"] == "admin"
+        with lock:
+            users, links = read_users(), FAMILY.read()
+            elder = find_user(users, elder_name)
+            if not elder or elder["rol"] != "usuario":
+                return self.fail(HTTPStatus.NOT_FOUND, "El adulto mayor no existe.")
+            manager = is_admin or (actor["rol"] == "cliente" and actor["usuario"].lower() == elder["cliente"].lower())
+            if action == "add":
+                if not manager:
+                    return self.fail(HTTPStatus.FORBIDDEN, "Solo el cliente del adulto mayor puede añadir familiares.")
+                if is_admin:
+                    member = find_user(users, str((data or {}).get("member") or ""))
+                else:
+                    doc_type, doc, error = validate_document(data.get("docType"), data.get("document"), "del familiar")
+                    if error:
+                        return self.fail(HTTPStatus.BAD_REQUEST, error)
+                    member = document_owner(users, doc_type, doc)
+                if not member or member["rol"] != "familiar":
+                    return self.fail(HTTPStatus.NOT_FOUND,
+                                     "Seleccione un familiar responsable registrado." if is_admin else
+                                     "No hay ningún familiar responsable registrado con ese documento. Pídale que cree "
+                                     "su cuenta en «Crear cuenta → Familiar responsable» con el documento de "
+                                     f"{elder['nombre']}: su solicitud le aparecerá aquí para aprobarla.")
+                set_link(links, elder["usuario"], member["usuario"], "activo", actor["usuario"],
+                         str((data or {}).get("relation") or ""))
+            else:
+                row = next((r for r in links if r["id"] == link_id(elder["usuario"], member_name or "")), None)
+                if not row:
+                    return self.fail(HTTPStatus.NOT_FOUND, "Esa persona no es familiar de este adulto mayor.")
+                if action == "approve":
+                    if not manager:
+                        return self.fail(HTTPStatus.FORBIDDEN, "Solo el cliente del adulto mayor puede aprobar solicitudes.")
+                    row["estado"] = "activo"
+                else:
+                    if not (manager or row["familiar"].lower() == actor["usuario"].lower()):
+                        return self.fail(HTTPStatus.FORBIDDEN, "Solo el cliente del adulto mayor puede quitar familiares.")
+                    links.remove(row)
+            FAMILY.write(links)
+            family = elder_family(users, links, elder)
+        self.send_json(HTTPStatus.OK, {"family": family})
 
     def upload_document(self, data):
         """El cuidador o colaborador sube (o reemplaza) uno de sus documentos, o añade un título."""
@@ -1355,13 +1568,16 @@ def main():
         wait_for_mysql()
     with lock:
         # Crea los archivos o tablas si no existen y actualiza los datos de versiones anteriores.
-        for table in (USERS, CAREGIVERS, SOS, SERVICES, ATTACHMENTS, STATES):
+        for table in (USERS, CAREGIVERS, SOS, SERVICES, ATTACHMENTS, STATES, FAMILY):
             table.setup()
         users = read_users()
         for u in users:  # adultos mayores registrados por un cliente antes de existir el campo «cliente»
             if u["rol"] == "usuario" and not u["cliente"] and u["registrado_por"]:
                 u["cliente"] = u["registrado_por"]
         USERS.write(users)
+        # Solo las cuentas de rol «familiar» son familiares responsables (una versión anterior guardaba también
+        # a los clientes en esta tabla).
+        FAMILY.write([r for r in FAMILY.read() if (find_user(users, r["familiar"]) or {}).get("rol") == "familiar"])
         migrate_caregivers()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
     where = f"MySQL {MYSQL['user']}@{MYSQL['host']}:{MYSQL['port']}/{MYSQL['database']}" if STORAGE == "mysql" else DATA

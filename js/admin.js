@@ -30,6 +30,8 @@
   const isSelf = (u) => u.toLowerCase() === session.username.toLowerCase();
 
   let users = [];
+  let family = {};          // adulto mayor → familiares responsables [{username, name, relation, status, …}]
+  const RELATIONS = ['Hijo/a', 'Nieto/a', 'Cónyuge o pareja', 'Hermano/a', 'Sobrino/a', 'Otro familiar', 'Amigo/a o vecino/a'];
   let services = [];
   let calls = [];
   let sosFilter = 'pendiente';
@@ -125,7 +127,9 @@
       ? rows.map((c) => `
         <tr class="${c.status === 'pendiente' ? 'row-alert' : ''}">
           <td>${fmt(c.date)}</td>
-          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span></td>
+          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span>
+            ${(c.family || []).map((m) => `<span class="sub">${m.client ? '🧾' : '👤'} ${esc(m.name)}${m.relation ? ` (${esc(m.relation)})` : ''}${m.mobile
+              ? ` · <a href="tel:${esc(m.mobile.replace(/[^0-9+]/g, ''))}">📱 ${esc(m.mobile)}</a>` : ''}</span>`).join('')}</td>
           <td>${esc(c.reason)}</td>
           <td>${c.lat ? `<a href="https://www.google.com/maps?q=${esc(c.lat)},${esc(c.lng)}" target="_blank" rel="noopener">📍 Ver mapa</a>` : '<span class="muted">No disponible</span>'}</td>
           <td><span class="pill ${c.status}">${c.status === 'pendiente' ? 'Pendiente' : 'Atendida'}</span></td>
@@ -146,9 +150,11 @@
   // ---------------------------------------------------------------- 1 y usuarios
   async function loadUsers() {
     try {
-      users = (await api('/api/admin/users')).users;
+      ({ users, family } = await api('/api/admin/users'));
     } catch (err) { return handleError(err); }
     renderPending();
+    renderFamilyRequests();
+    renderFamilyTab();
     renderUsers();
     renderClients();
     renderCollaborators();
@@ -222,7 +228,7 @@
     }
   }
 
-  /** Clientes (familiares responsables) con los adultos mayores que han registrado. */
+  /** Clientes (contratan SilverAid) con sus adultos mayores. */
   function renderClients() {
     const clients = users.filter((u) => u.role === 'cliente');
     $('clients-body').innerHTML = clients.length
@@ -339,7 +345,6 @@
 
   function renderPending() {
     const pending = users.filter((u) => u.status === 'pendiente');
-    setCount('count-pending', pending.length);
     $('pending-body').innerHTML = pending.length
       ? pending.map((u) => `
         <tr>
@@ -368,7 +373,8 @@
         <td>${u.phone ? `☎️ ${esc(u.phone)}` : ''}${u.mobile ? `<span class="sub">📱 ${esc(u.mobile)}</span>` : ''}${u.email ? `<span class="sub">${esc(u.email)}</span>` : ''}${!u.phone && !u.mobile ? '<span class="muted">Sin datos</span>' : ''}</td>
         <td>${u.address ? esc(u.address) : '<span class="muted">—</span>'}</td>
         <td>${u.bloodType ? `<span class="blood">${esc(u.bloodType)}</span>` : '<span class="muted">—</span>'}</td>
-        <td>${u.client ? nameOf(u.client) : '<span class="muted">Sin asignar</span>'}</td>
+        <td>${u.client ? nameOf(u.client) : '<span class="muted">Sin asignar</span>'}
+          ${(family[u.username] || []).length ? `<span class="sub">👨‍👩‍👧 ${(family[u.username] || []).length} familiar(es) responsable(s)</span>` : ''}</td>
         <td><span class="pill ${u.status}">${STATUS[u.status] || esc(u.status)}</span></td>
         <td class="actions stack">
           <button class="btn small" data-edit-user="${esc(u.username)}">✏️ Editar</button>
@@ -382,7 +388,130 @@
     fillClientSelect();
   }
 
-  /** Desplegable «Cliente asociado»: solo clientes ya registrados. */
+  /** Familiares responsables de un adulto mayor, con aprobar/rechazar/quitar y opciones para añadir. */
+  function familyCell(u) {
+    const members = family[u.username] || [];
+    const linked = new Set(members.map((m) => m.username.toLowerCase()));
+    const free = users.filter((c) => c.role === 'familiar' && !linked.has(c.username.toLowerCase()));
+    const lines = members.map((m) => `
+      <div class="family-line">👤 ${esc(m.name)}
+        <span class="sub">${[m.relation, m.mobile ? '📱 ' + m.mobile : ''].filter(Boolean).map(esc).join(' · ')}</span>
+        ${m.status === 'pendiente' ? `<span class="pill pendiente">Solicitud</span>
+          <button class="btn ok small" data-fam-approve="${esc(m.username)}" data-elder="${esc(u.username)}">✔ Aprobar</button>` : ''}
+        <button class="btn ghost small" data-fam-remove="${esc(m.username)}" data-elder="${esc(u.username)}">${m.status === 'pendiente' ? 'Rechazar' : 'Quitar'}</button>
+      </div>`).join('');
+    const add = `
+      <div class="family-add-admin">
+        ${free.length ? `<form class="family-add-admin" data-elder="${esc(u.username)}">
+          <select name="member" required aria-label="Familiar a añadir"><option value="">➕ Añadir familiar ya registrado…</option>
+            ${free.map((c) => `<option value="${esc(c.username)}">${esc(c.name)} (@${esc(c.username)})</option>`).join('')}</select>
+          <select name="relation" aria-label="Parentesco"><option value="">Parentesco…</option>${RELATIONS.map((r) => `<option>${r}</option>`).join('')}</select>
+          <button class="btn small">Añadir</button>
+        </form>` : ''}
+        <button type="button" class="btn ghost small" data-new-family="${esc(u.username)}">👤➕ Crear nuevo familiar</button>
+      </div>`;
+    const holder = users.find((c) => c.username.toLowerCase() === (u.client || '').toLowerCase());
+    const main = holder ? `
+      <div class="family-line">🧾 <strong>${esc(holder.name)}</strong>
+        <span class="sub">${['Cliente · responsable principal', holder.mobile ? '📱 ' + holder.mobile : ''].filter(Boolean).map(esc).join(' · ')}</span>
+      </div>` : '';
+    return main + (lines || (main ? '' : '<span class="muted">Ninguno todavía</span>')) + add;
+  }
+
+  /** Pestaña «Familiares responsables»: por adulto mayor, su cliente (cambiable) y sus familiares; debajo, las cuentas. */
+  let familyFilter = '';
+  function renderFamilyTab() {
+    if (document.activeElement?.closest('#family-body form, #family-body select')) return; // no repintar mientras elige
+    const elders = users.filter((u) => u.role === 'usuario');
+    const requests = (u) => (family[u.username] || []).filter((m) => m.status === 'pendiente').length;
+    setCount('count-family', elders.reduce((n, u) => n + requests(u), 0));
+    const clients = users.filter((c) => c.role === 'cliente');
+    const list = elders.filter((u) => !familyFilter || (familyFilter === 'requests' ? requests(u) > 0 : !(family[u.username] || []).length));
+    $('family-body').innerHTML = list.length
+      ? list.map((u) => `
+        <tr>
+          <td><strong>${esc(u.name)}</strong><span class="sub">@${esc(u.username)}</span>${docText(u)}
+            <span class="pill ${u.status}">${STATUS[u.status] || esc(u.status)}</span></td>
+          <td>
+            <select class="holder-select" data-elder="${esc(u.username)}" aria-label="Cliente de ${esc(u.name)}">
+              ${u.client ? '' : '<option value="">Sin asignar…</option>'}
+              ${clients.map((c) => `<option value="${esc(c.username)}" ${c.username.toLowerCase() === (u.client || '').toLowerCase() ? 'selected' : ''}>${esc(c.name)} (@${esc(c.username)})</option>`).join('')}
+            </select>
+          </td>
+          <td>${familyCell(u)}</td>
+        </tr>`).join('')
+      : `<tr><td colspan="3" class="empty">${familyFilter ? 'Ningún adulto mayor coincide con el filtro.' : 'Todavía no hay adultos mayores registrados.'}</td></tr>`;
+
+    // Cuentas de familiares responsables
+    // Primero los clientes (responsables principales), después los familiares.
+    const isHolder = (a) => elders.some((u) => (u.client || '').toLowerCase() === a.username.toLowerCase());
+    const accounts = [...users.filter((u) => u.role === 'cliente' && isHolder(u)), ...users.filter((u) => u.role === 'familiar')];
+    $('family-accounts-body').innerHTML = accounts.length
+      ? accounts.map((a) => {
+          const holder = a.role === 'cliente';
+          const of = holder
+            ? elders.filter((u) => (u.client || '').toLowerCase() === a.username.toLowerCase()).map((u) => ({ u, m: { relation: 'Cliente' } }))
+            : elders.map((u) => ({ u, m: (family[u.username] || []).find((m) => m.username.toLowerCase() === a.username.toLowerCase()) })).filter((x) => x.m);
+          return `
+        <tr${holder ? ' class="holder-row"' : ''}>
+          <td>${holder ? '🧾 ' : ''}<strong>${esc(a.name)}</strong><span class="sub">@${esc(a.username)}${holder ? ' · Cliente (responsable principal)' : ''}</span>${docText(a)}</td>
+          <td>${a.mobile ? `📱 ${esc(a.mobile)}` : '<span class="muted">Sin celular</span>'}${a.email ? `<span class="sub">${esc(a.email)}</span>` : ''}</td>
+          <td>${of.length ? of.map(({ u, m }) => `<div>${esc(u.name)} <span class="sub">${esc(m.relation || '')}${m.status === 'pendiente' ? ' · ⏳ solicitud' : ''}</span></div>`).join('') : '<span class="muted">Ninguno</span>'}</td>
+          <td>${fmt(a.registeredAt)}</td>
+          <td><span class="pill ${a.status}">${STATUS[a.status] || esc(a.status)}</span></td>
+          <td class="actions stack">
+            ${a.status === 'activo'
+              ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(a.username)}">Inactivar</button>`
+              : `<button class="btn ok small" data-status="activo" data-user="${esc(a.username)}">Activar</button>`}
+            ${holder ? '' : `<button class="btn ghost small" data-delete-user="${esc(a.username)}">Eliminar</button>`}
+          </td>
+        </tr>`;
+        }).join('')
+      : '<tr><td colspan="6" class="empty">Todavía no hay familiares responsables registrados.</td></tr>';
+  }
+
+  /** Familiares que pidieron unirse a un adulto mayor (pestaña «Altas pendientes»). */
+  function renderFamilyRequests() {
+    const rows = [];
+    users.filter((u) => u.role === 'usuario').forEach((u) => (family[u.username] || [])
+      .filter((m) => m.status === 'pendiente').forEach((m) => rows.push({ elder: u, m })));
+    setCount('count-pending', users.filter((u) => u.status === 'pendiente').length + rows.length);
+    $('family-requests-body').innerHTML = rows.length
+      ? rows.map(({ elder, m }) => `
+        <tr>
+          <td><strong>${esc(m.name)}</strong><span class="sub">@${esc(m.username)}</span>${m.mobile ? `<span class="sub">📱 ${esc(m.mobile)}</span>` : ''}</td>
+          <td>${esc(elder.name)}<span class="sub">@${esc(elder.username)}</span></td>
+          <td>${m.relation ? esc(m.relation) : '<span class="muted">—</span>'}</td>
+          <td>${elder.client ? nameOf(elder.client) : '<span class="muted">—</span>'}</td>
+          <td>${fmt(m.date)}</td>
+          <td class="actions">
+            <button class="btn ok small" data-fam-approve="${esc(m.username)}" data-elder="${esc(elder.username)}">✔ Aprobar</button>
+            <button class="btn ghost small" data-fam-remove="${esc(m.username)}" data-elder="${esc(elder.username)}">Rechazar</button>
+          </td>
+        </tr>`).join('')
+      : '<tr><td colspan="6" class="empty">✅ No hay solicitudes de familiares.</td></tr>';
+  }
+
+  /** Aprobar, quitar o añadir un familiar responsable de un adulto mayor. */
+  async function changeFamily(method, elder, member, body, okMsg) {
+    const base = `/api/admin/users/${encodeURIComponent(elder)}/family`;
+    const path = method === 'DELETE' ? `${base}/${encodeURIComponent(member)}` : member ? `${base}/${encodeURIComponent(member)}/approve` : base;
+    try {
+      await api(path, { method, body });
+      toast(okMsg, 'ok');
+    } catch (err) { handleError(err); }
+    loadUsers();
+  }
+
+  function onFamilyClick(e) {
+    const b = e.target.closest('button[data-elder]');
+    if (!b) return false;
+    if (b.dataset.famApprove) changeFamily('POST', b.dataset.elder, b.dataset.famApprove, {}, 'Familiar aprobado.');
+    else if (b.dataset.famRemove && confirmed(b)) changeFamily('DELETE', b.dataset.elder, b.dataset.famRemove, undefined, 'Familiar quitado.');
+    return true;
+  }
+
+  /** Desplegable «Cliente»: solo clientes ya registrados. */
   function fillClientSelect() {
     const sel = $('user-client');
     const current = sel.value;
@@ -479,6 +608,84 @@
     });
 
     // Altas y usuarios
+    $('family-requests-body').addEventListener('click', onFamilyClick);
+    $('family-body').addEventListener('click', (e) => {
+      const nb = e.target.closest('[data-new-family]');
+      if (!nb) return onFamilyClick(e);
+      toggleMemberForm(true, users.find((u) => u.username === nb.dataset.newFamily));
+    });
+    $('family-body').addEventListener('submit', (e) => {
+      const form = e.target.closest('form.family-add-admin');
+      if (!form) return;
+      e.preventDefault();
+      const f = form.elements;
+      changeFamily('POST', form.dataset.elder, null, { member: f.member.value, relation: f.relation.value }, 'Familiar añadido.');
+    });
+    $('family-accounts-body').addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.status) setStatus(b.dataset.user, b.dataset.status);
+      if (b.dataset.deleteUser && confirmed(b)) deleteUser(b.dataset.deleteUser);
+    });
+
+    // Familiares responsables: formulario «Crear nuevo familiar» (para un adulto mayor ya registrado)
+    const memberForm = $('form-member');
+    const memberError = (msg) => {
+      const p = memberForm.querySelector('.form-error');
+      p.textContent = msg || '';
+      p.hidden = !msg;
+    };
+    let memberElder = null;
+    function toggleMemberForm(open, elder = null) {
+      memberElder = open ? elder : null;
+      $('member-form-card').hidden = !open;
+      if (!open) return;
+      memberForm.reset();
+      memberError('');
+      $('member-form-title').textContent = `Nuevo familiar responsable de ${elder.name}`;
+      $('member-form-card').scrollIntoView({ behavior: 'smooth', block: 'start' });
+      memberForm.elements.name.focus({ preventScroll: true });
+    }
+    $('btn-cancel-member').addEventListener('click', () => toggleMemberForm(false));
+    memberForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const f = memberForm.elements;
+      const v = (k) => f[k].value.trim();
+      if (!v('name')) return memberError('Escriba el nombre del familiar responsable.');
+      if (!f.docType.value || !docOk(f.docType.value, v('document'))) return memberError('Revise el tipo y número de documento.');
+      if (!v('address')) return memberError('Escriba la dirección.');
+      if (!/^[0-9+()\-\s]{7,20}$/.test(v('mobile'))) return memberError('Escriba un celular válido (7 a 20 dígitos).');
+      if (!/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(v('email'))) return memberError('Escriba un correo electrónico válido.');
+      memberError('');
+      try {
+        const { user, joined } = await api('/api/admin/family-members', { method: 'POST', body: {
+          name: v('name'), docType: f.docType.value, document: v('document'), address: v('address'), mobile: v('mobile'), email: v('email'),
+          relation: f.relation.value, username: v('username'), password: f.password.value, joinElder: memberElder.username,
+        } });
+        toast(`${user.name} es ahora familiar responsable de ${joined}.`, 'ok', 7000);
+        toggleMemberForm(false);
+        loadUsers();
+      } catch (err) {
+        if (err.status === 401 || err.status === 403) handleError(err); else memberError(err.message);
+      }
+    });
+    $('family-body').addEventListener('change', async (e) => {
+      const sel = e.target.closest('.holder-select');
+      if (!sel || !sel.value) return;
+      try {
+        await api(`/api/admin/users/${encodeURIComponent(sel.dataset.elder)}/holder`, { method: 'POST', body: { client: sel.value } });
+        toast('Cliente actualizado.', 'ok');
+      } catch (err) { handleError(err); }
+      sel.blur();
+      loadUsers();
+    });
+    $('family-filter').addEventListener('click', (e) => {
+      const b = e.target.closest('[data-filter]');
+      if (!b) return;
+      familyFilter = b.dataset.filter;
+      document.querySelectorAll('#family-filter .chip').forEach((c) => c.setAttribute('aria-pressed', String(c === b)));
+      renderFamilyTab();
+    });
     $('pending-body').addEventListener('click', (e) => {
       const b = e.target.closest('button');
       if (!b) return;
@@ -529,8 +736,8 @@
       e.preventDefault();
       const f = clientForm.elements;
       const v = (k) => f[k].value.trim();
-      if (!v('name')) return clientError('Escriba el nombre del familiar responsable.');
-      if (!f.docType.value || !docOk(f.docType.value, v('document'))) return clientError('Revise el tipo y número de documento del familiar responsable.');
+      if (!v('name')) return clientError('Escriba el nombre del cliente.');
+      if (!f.docType.value || !docOk(f.docType.value, v('document'))) return clientError('Revise el tipo y número de documento del cliente.');
       if (!v('address')) return clientError('Escriba la dirección.');
       if (!/^[0-9+()\-\s]{7,20}$/.test(v('mobile'))) return clientError('Escriba un celular válido (7 a 20 dígitos).');
       if (!/^[^@\s;]+@[^@\s;]+\.[^@\s;]+$/.test(v('email'))) return clientError('Escriba un correo electrónico válido.');
@@ -550,7 +757,7 @@
       };
       try {
         const { user } = await api('/api/admin/clients', { method: 'POST', body });
-        toast(`Cliente ${user.name} creado. Su familiar quedó en «Altas pendientes».`, 'ok', 7000);
+        toast(`Cliente ${user.name} creado. Su adulto mayor quedó en «Altas pendientes».`, 'ok', 7000);
         toggleClientForm(false);
         loadUsers();
       } catch (err) {
@@ -675,6 +882,7 @@
     });
 
     $('users-body').addEventListener('click', (e) => {
+      if (onFamilyClick(e)) return;
       const b = e.target.closest('button');
       if (!b) return;
       if (b.dataset.editUser) {

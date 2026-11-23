@@ -7,6 +7,18 @@
 
   const $ = (id) => document.getElementById(id);
 
+  // Adulto mayor: su cliente y sus familiares responsables en SilverAid (/api/me/family) son también contactos de emergencia,
+  // además de los que añada a mano. No se repiten los que ya están con el mismo teléfono.
+  let linked = [];
+  const digits = (s) => String(s || '').replace(/\D/g, '');
+  SA.emergencyContacts = () => {
+    const own = new Set(SA.state.contacts.map((c) => digits(c.phone)).filter(Boolean));
+    return linked
+      .filter((m) => !own.has(digits(m.mobile)))
+      .map((m) => ({ name: m.name, phone: m.mobile, relation: m.client ? 'Cliente' : ['Familiar responsable', m.relation].filter(Boolean).join(' · ') }))
+      .concat(SA.state.contacts);
+  };
+
   function closeOverlay() {
     clearInterval(timer);
     timer = null;
@@ -70,7 +82,7 @@
     } catch (err) {
       central = 'failed';
     }
-    const names = SA.state.contacts.map((c) => c.name).join(', ') || 'ningún contacto (añada uno en Familia)';
+    const names = SA.emergencyContacts().map((c) => c.name).join(', ') || 'ningún contacto (añada uno en Familia)';
     const link = loc ? `https://www.google.com/maps?q=${loc.lat},${loc.lng}` : null;
     SA.alertFamily('sos', `🆘 ${SA.state.user.name} necesita ayuda (${reason}). ${loc ? 'Ubicación adjunta.' : 'Ubicación no disponible.'}`, link);
     SA.beep(3, 990);
@@ -142,13 +154,18 @@
   }
 
   function render() {
-    $('sos-contacts').innerHTML = SA.state.contacts.length
-      ? SA.state.contacts.map((c) => `<li><span><span class="title">${SA.esc(c.name)}</span><span class="sub">${SA.esc(c.relation)}</span></span><span>${SA.esc(c.phone)}</span></li>`).join('')
+    if (!SA.state) return; // aún cargando los datos del dispositivo
+    const contacts = SA.emergencyContacts();
+    $('sos-contacts').innerHTML = contacts.length
+      ? contacts.map((c) => `<li><span><span class="title">${SA.esc(c.name)}</span><span class="sub">${SA.esc(c.relation)}</span></span><span>${SA.esc(c.phone)}</span></li>`).join('')
       : '<li class="empty">No hay contactos. Añádalos en la sección Familia.</li>';
   }
   SA.onRender(render);
 
   document.addEventListener('DOMContentLoaded', () => {
+    if (SA.session.role === 'usuario' && window.SAAuth && SAAuth.get()) {
+      SAAuth.api('/api/me/family').then((res) => { linked = res.family || []; render(); }).catch(() => {});
+    }
     document.addEventListener('click', (e) => {
       if (e.target.closest('[data-action="sos"]')) SA.startSOS();
     });

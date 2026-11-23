@@ -83,18 +83,24 @@ Usuario administrador por defecto: **admin / admin**.
   | Código | Quién es |
   |--------|----------|
   | `usuario` | Adulto mayor |
-  | `cliente` | Familiar responsable |
+  | `cliente` | Cliente: contrata SilverAid y registra al adulto mayor (uno por adulto mayor) |
+  | `familiar` | Familiar responsable: acompaña a un adulto mayor desde su cuenta (puede haber varios) |
   | `cuidador` | Cuidador/a |
   | `colaborador` | Colaborador/a: acompañamiento a trámites y citas, solicitar y llevar medicamentos, conductor, entre otros |
   | `admin` | Administrador |
 
 - Desde «Crear una cuenta» se elige el tipo de cuenta y se pasa al registro por pasos de ese rol:
-  - **Adulto mayor** (`registro-familiar.html?para=mi`), 3 pasos: el mismo formulario del familiar responsable, en modo «me registro yo mismo». La persona es su propio cliente: se crean su cuenta de *cliente* y una de *usuario* con sus mismos datos (solo se pide además el tipo de sangre), enlazada a ella. Como adulto mayor entra con su número de documento y la misma contraseña, cuando el administrador active esa cuenta. Por eso su nombre de usuario no puede ser su número de documento.
-  - **Familiar responsable** (*cliente*), 3 pasos: sus datos (nombre, documento, dirección, celular, correo), los del adulto mayor y el acceso. Su cuenta queda activa; la del adulto mayor, pendiente de alta.
+  - **Adulto mayor** (`registro-familiar.html?para=mi`), 3 pasos: el formulario del cliente en modo «me registro yo mismo». La persona es su propio cliente: se crean su cuenta de *cliente* y una de *usuario* con sus mismos datos (solo se pide además el tipo de sangre), enlazada a ella. Como adulto mayor entra con su número de documento y la misma contraseña, cuando el administrador active esa cuenta. Por eso su nombre de usuario no puede ser su número de documento.
+  - **Cliente** (*cliente*, `registro-familiar.html`), 3 pasos: sus datos (nombre, documento, dirección, celular, correo), los del adulto mayor y el acceso. Su cuenta queda activa; la del adulto mayor, pendiente de alta. Si el adulto mayor ya está registrado (mismo documento), no se deja registrarlo otra vez.
+  - **Familiar responsable** (*familiar*, `registro-familiar.html?para=familiar`), 3 pasos: sus datos, su parentesco y el **documento del adulto mayor** (ya registrado), y el acceso. Su cuenta queda activa y su **solicitud para unirse** queda pendiente hasta que la apruebe el cliente del adulto mayor o el administrador.
   - **Cuidador/a** (*cuidador*), 4 pasos: datos personales; formación (nivel de escolaridad y hasta 5 títulos en PDF, opcionales); documentos (RUT ante la DIAN, certificados de afiliación a salud, pensión y ARL como independiente y certificado del RETHUS); acceso.
   - **Colaborador/a** (*colaborador*), 4 pasos: datos personales con documento de identidad; perfil (escolaridad, pase de conducción —carro, moto o ambos, con su categoría A1–C3— y afiliación a seguridad social como independiente); documentos (documento de identidad y, según las respuestas, pase y certificados de salud, pensión y ARL); acceso.
   - Todos los documentos son PDF de máximo 300 KB, revisados en el navegador y en el servidor. **Al registrarse son opcionales**: cuidador y colaborador quedan **en verificación**, pueden entrar solo a «Mis documentos» (`documentos.html`) para subir los que falten, y el administrador los activa cuando están completos (el servidor no deja activar a nadie con documentos obligatorios pendientes).
-  - Los **adultos mayores** (*usuario*) los registra su familiar o el administrador. Nunca se crean *admin* desde el registro.
+  - Los **adultos mayores** (*usuario*) los registra su cliente o el administrador, o se registran a sí mismos. Nunca se crean *admin* desde el registro.
+- **Cliente y familiares responsables son roles distintos.** Cada adulto mayor tiene **un cliente** (`users.cliente`: quien lo registró o el que asigne el administrador), que contrata los servicios y recibe el catálogo, y puede tener **varios familiares responsables** (rol *familiar*), que no son clientes:
+  - El cliente, en *Familia → Mis adultos mayores*, añade familiares por su número de documento (deben tener cuenta de familiar), aprueba o rechaza solicitudes y quita familiares. Los familiares ven en esa misma sección al adulto mayor, a su cliente y a los demás familiares, y pueden salir de la familia; no registran adultos mayores.
+  - El administrador lo gestiona en la pestaña *Familiares responsables*. No se puede eliminar a un cliente mientras tenga algún adulto mayor; antes hay que asignarle otro cliente.
+  - El cliente y los familiares activos aparecen como **contactos de emergencia** del adulto mayor (pantalla *Ayuda*) y junto a cada llamada SOS del panel de administración.
 - Estados de cuenta: `activo`, `pendiente` (esperando alta), `inactivo` y `verificacion` (cuidador o colaborador registrado que aún no ha sido activado).
 
 ## Página de administración (`admin.html`)
@@ -103,13 +109,14 @@ Solo para el rol `admin` (al iniciar sesión como admin se abre directamente):
 
 | Pestaña | Qué permite |
 |---------|-------------|
-| 👥 **Usuarios** | Adultos mayores (rol `usuario`), con filtro por estado y acciones **✏️ Editar**, **Inactivar**/Activar y Eliminar. El botón **➕ Crear usuario** despliega el formulario: nombre completo, dirección, teléfono, celular, correo (opcional), tipo de sangre, **cliente asociado** (debe existir antes) y usuario/contraseña de acceso. Es la pestaña que se abre por defecto. |
-| 👨‍👩‍👧 **Clientes** | Familiares responsables con los adultos mayores que han registrado y su estado; permite dar de alta a esos familiares y activar/desactivar al cliente. |
+| 👥 **Usuarios** | Adultos mayores (rol `usuario`), con filtro por estado y acciones **✏️ Editar**, **Inactivar**/Activar y Eliminar. El botón **➕ Crear usuario** despliega el formulario: nombre completo, dirección, teléfono, celular, correo (opcional), tipo de sangre, **cliente** (debe existir antes) y usuario/contraseña de acceso. La columna *Cliente* indica también cuántos familiares responsables tiene. Es la pestaña que se abre por defecto. |
+| 👪 **Familiares responsables** | Por cada adulto mayor: su **cliente** (se cambia con el desplegable) y sus familiares responsables, con botones para aprobar o rechazar solicitudes, quitar familiares, añadir un familiar ya registrado o **👤➕ Crear nuevo familiar** (cuenta activa y ya unida). Filtros «Con solicitudes» y «Sin familiares»; la pestaña muestra cuántas solicitudes hay por aprobar. Debajo, las **cuentas de familiares responsables** con sus adultos mayores y acciones Activar/Inactivar/Eliminar. |
+| 🧾 **Clientes** | Quienes contratan SilverAid, con sus adultos mayores y su estado; permite dar de alta a esos adultos mayores, enviar el catálogo y activar/desactivar al cliente. |
 | 🧑‍⚕️ **Cuidadores** | Lista de cuidadores registrados con botones **✏️ Editar** (abre el formulario con sus datos; si tiene cuenta se puede cambiar la contraseña, si no, crearla) y **Eliminar**. Debajo, el botón **➕ Registrar cuidador** que despliega el formulario: información personal, perfil, cuenta opcional (rol `cuidador`) y **disponibilidad semanal** en una matriz (días en columnas, una hora por fila de 06:00 a 22:00; clic o arrastre para marcar). La aplicación solo asigna un cuidador si está disponible ese día y hora. |
 | 🧑‍⚕️ **Cuidadores** (cuentas) | Debajo de las fichas, los cuidadores que se registraron desde «Crear cuenta», con escolaridad, botones **📄** para abrir sus PDF (RUT, salud, pensión, ARL, RETHUS y cada título), los documentos que faltan y **✔ Verificar y activar** (solo con todos los obligatorios) o Inactivar. La pestaña muestra cuántos esperan verificación. |
 | 🤝 **Colaboradores** | Colaboradores registrados: documento, contacto, escolaridad, pase de conducción, afiliación a seguridad social, con botones **📄** para abrir los PDF adjuntos (documento, pase y certificados de salud, pensión y ARL), los documentos que faltan y **✔ Verificar y activar** (solo con todos los obligatorios) o Inactivar. La pestaña muestra cuántos esperan verificación. |
-| ⏳ **Altas pendientes** | Adultos mayores que un cliente (familiar) registró desde la sección *Familia*. No pueden entrar hasta que el admin les da de alta (o rechaza la solicitud). |
-| 🚨 **Llamadas SOS** | Registro de cada pulsación del botón de pánico (y de caídas sin respuesta): fecha, persona, motivo y ubicación. Se actualiza cada 10 s, suena un aviso con cada llamada nueva (en cualquier pestaña) y se marcan como atendidas con una nota. |
+| ⏳ **Altas pendientes** | Adultos mayores que un cliente registró. No pueden entrar hasta que el admin les da de alta (o rechaza la solicitud). Debajo, las **solicitudes de familiares responsables** que quieren unirse a un adulto mayor. |
+| 🚨 **Llamadas SOS** | Registro de cada pulsación del botón de pánico (y de caídas sin respuesta): fecha, persona con su cliente y sus familiares responsables (y su celular), motivo y ubicación. Se actualiza cada 10 s, suena un aviso con cada llamada nueva (en cualquier pestaña) y se marcan como atendidas con una nota. |
 
 Archivos de datos (en `data/`, fuera de git):
 
@@ -118,6 +125,7 @@ Archivos de datos (en `data/`, fuera de git):
 | `users.txt` | `usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;direccion;telefono;celular;email;tipo_sangre;cliente;tipo_documento;documento;catalogo_enviado;escolaridad;pase_conduccion;pase_vehiculo;pase_categorias;seguridad_social;certificado;adjunto_documento;adjunto_pase;adjunto_pension;adjunto_arl;adjunto_rut;adjunto_titulos;adjunto_rethus` (de `direccion` a `cliente`, ficha del adulto mayor; desde `escolaridad`, ficha del colaborador y del cuidador; en `adjunto_titulos`, los nombres de los títulos separados por «\|») |
 | `attachments.txt` | `id;usuario;clase;nombre_archivo;fecha;contenido` — PDF del colaborador (`clase`: `documento`, `pase`, `salud`, `pension`, `arl`, `rut`, `rethus` o `titulos-1`…`titulos-5`; contenido en base64) |
 | `caregivers.txt` | `id;nombre;documento;fecha_nacimiento;telefono;email;direccion;zona;titulo;experiencia;habilidades;disponibilidad;usuario;fecha_registro` — disponibilidad como `lun=8,9,10\|mar=14,15` (horas de inicio de cada franja de 1 h) |
+| `family.txt` | `id;adulto;familiar;parentesco;estado;solicitado_por;fecha` — familiares responsables (rol `familiar`) de cada adulto mayor (`estado`: `activo` o `pendiente` de aprobación; `id` = `adulto:familiar` en minúsculas). El cliente no aparece aquí: está en `users.cliente`. |
 | `sos.txt` | `id;fecha;usuario;nombre;motivo;lat;lng;estado;atendido_por;fecha_atencion;nota` |
 | `states.txt` | `usuario;actualizado;contenido` — datos de la aplicación de cada usuario sincronizados desde IndexedDB (JSON en base64; `actualizado` = marca de tiempo en ms del último cambio) |
 - Cada usuario tiene sus propios datos de demo (medicamentos, citas, etc.), guardados en el dispositivo y sincronizados con el servidor.
@@ -159,7 +167,7 @@ css/landing.css    estilos de la landing page
 assets/brand/      logos e ícono
 js/auth.js         sesión y llamadas a la API
 js/admin.js        página de administración
-js/elders.js       clientes: registrar a su familiar mayor
+js/elders.js       cliente y familiar: sus adultos mayores y los familiares responsables de cada uno
 js/availability.js matriz de disponibilidad (editor y resumen)
 css/styles.css
 js/store.js        estado, persistencia y utilidades

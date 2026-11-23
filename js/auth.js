@@ -71,7 +71,8 @@
     /** Roles de la aplicación (código guardado en users.txt → nombre visible). */
     ROLES: {
       usuario: 'Adulto mayor',
-      cliente: 'Familiar responsable',
+      cliente: 'Cliente',
+      familiar: 'Familiar responsable',
       cuidador: 'Cuidador/a',
       colaborador: 'Colaborador/a',
       admin: 'Administrador',

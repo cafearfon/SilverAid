@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=11">
+  <link rel="stylesheet" href="css/styles.css?v=12">
   <script src="js/auth.js?v=10"></script>
   <script src="js/db.js?v=10"></script>
   <script src="js/pwa.js?v=12"></script>
@@ -112,18 +112,24 @@
 
       <!-- Solo para clientes (familiar responsable) -->
       <article class="card" id="elders-card" hidden>
-        <h2>👵 Registrar a mi familiar mayor</h2>
-        <p class="muted">Cree la cuenta de su familiar. El administrador de SilverAid la revisará y le dará de alta; hasta entonces no podrá iniciar sesión.</p>
+        <h2>👵 Mis adultos mayores</h2>
+        <p class="muted" id="elders-intro"></p>
         <p class="offline-note" id="elders-offline" hidden>📡 Sin conexión: estado guardado en el dispositivo; puede haber cambiado.</p>
-        <ul id="elder-list" class="list"></ul>
-        <form id="form-elder" class="form compact">
-          <div class="form-row">
-            <label>Nombre completo <input name="name" required></label>
-            <label>Usuario <input name="username" required pattern="[A-Za-z0-9_.\-]{3,30}" title="3 a 30 caracteres: letras, números, punto, guion o guion bajo"></label>
-            <label>Contraseña <input name="password" required minlength="4"></label>
-          </div>
-          <button class="btn">Enviar para alta</button>
-        </form>
+        <ul id="join-requests" class="list"></ul>
+        <div id="elder-list"></div>
+
+        <details class="elder-new">
+          <summary>➕ Registrar a otro adulto mayor</summary>
+          <p class="small-text muted">Cree la cuenta de su familiar mayor; usted será su cliente. El administrador de SilverAid la revisará y le dará de alta; hasta entonces no podrá iniciar sesión.</p>
+          <form id="form-elder" class="form compact">
+            <div class="form-row">
+              <label>Nombre completo <input name="name" required></label>
+              <label>Usuario <input name="username" required pattern="[A-Za-z0-9_.\-]{3,30}" title="3 a 30 caracteres: letras, números, punto, guion o guion bajo"></label>
+              <label>Contraseña <input name="password" required minlength="4"></label>
+            </div>
+            <button class="btn">Enviar para alta</button>
+          </form>
+        </details>
       </article>
 
       <article class="card">
@@ -272,11 +278,11 @@
   <script src="js/store.js?v=10"></script>
   <script src="js/meds.js?v=10"></script>
   <script src="js/family.js?v=10"></script>
-  <script src="js/sos.js?v=10"></script>
+  <script src="js/sos.js?v=12"></script>
   <script src="js/assistant.js?v=10"></script>
   <script src="js/availability.js?v=10"></script>
   <script src="js/caregivers.js?v=10"></script>
-  <script src="js/elders.js?v=10"></script>
+  <script src="js/elders.js?v=13"></script>
   <script src="js/main.js?v=10"></script>
 </body>
 </html>
