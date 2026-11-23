@@ -24,8 +24,8 @@
     </a>
 
     <section class="card login-card">
-      <h1>👨‍👩‍👧 Registro de familiar responsable</h1>
-      <p class="muted small-text">Cree su cuenta y registre a la persona mayor a su cargo. Su cuenta queda activa al momento; la del adulto mayor, pendiente hasta que SilverAid la revise.</p>
+      <h1 id="reg-title">👨‍👩‍👧 Registro de familiar responsable</h1>
+      <p class="muted small-text" id="reg-intro">Cree su cuenta y registre a la persona mayor a su cargo. Su cuenta queda activa al momento; la del adulto mayor, pendiente hasta que SilverAid la revise.</p>
       <form id="reg-form" class="form wizard" novalidate>
         <ol class="steps" id="steps" aria-hidden="true"></ol>
         <p class="sr-only" id="step-label" aria-live="polite"></p>
@@ -52,7 +52,7 @@
         </section>
 
         <section class="step" data-title="Adulto mayor" hidden>
-          <label class="check-field"><input type="checkbox" name="selfElder"> <span><strong>¿Usted es el adulto mayor?</strong>
+          <label class="check-field" hidden><input type="checkbox" name="selfElder"> <span><strong>¿Usted es el adulto mayor?</strong>
             <small class="muted">Márquelo si se registra a sí mismo: tendrá su cuenta de familiar responsable y también la de adulto mayor.</small></span></label>
           <div class="info-box" id="self-elder-note" hidden>
             Usaremos sus datos del paso anterior. Como adulto mayor entrará con su <b>número de documento</b> y la <b>misma contraseña</b>, cuando SilverAid revise y active esa cuenta.
@@ -119,11 +119,17 @@
       const v = (name) => f[name].value.trim();
       const self = () => f.selfElder.checked;
 
-      // Si el familiar es el adulto mayor, solo falta el tipo de sangre.
-      f.selfElder.addEventListener('change', () => {
-        document.getElementById('elder-fields').hidden = self();
-        document.getElementById('self-elder-note').hidden = !self();
-      });
+      // registro-familiar.html?para=mi: el adulto mayor se registra a sí mismo. Es su propio cliente
+      // (familiar responsable) y del paso «Adulto mayor» solo falta el tipo de sangre.
+      if (new URLSearchParams(location.search).get('para') === 'mi') {
+        f.selfElder.checked = true;
+        document.title = 'SilverAid — Registro de adulto mayor';
+        document.getElementById('reg-title').textContent = '👵 Registro de adulto mayor';
+        document.getElementById('reg-intro').textContent = 'Cree su cuenta para usar SilverAid usted mismo. Podrá entrar de inmediato; sus servicios como adulto mayor se activan cuando SilverAid revise su registro.';
+        document.querySelector('.step[data-title="Adulto mayor"]').dataset.title = 'Su salud';
+        document.getElementById('elder-fields').hidden = true;
+        document.getElementById('self-elder-note').hidden = false;
+      }
 
       SAReg.init({
         role: 'cliente',

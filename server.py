@@ -930,8 +930,7 @@ class Handler(SimpleHTTPRequestHandler):
             role = data.get("role")
             if role not in SELF_SIGNUP_ROLES:
                 return self.fail(HTTPStatus.BAD_REQUEST,
-                                 "Elija «Familiar responsable», «Cuidador/a» o «Colaborador/a». "
-                                 "Las cuentas de adultos mayores las crea su familiar.")
+                                 "Elija «Adulto mayor», «Familiar responsable», «Cuidador/a» o «Colaborador/a».")
             user, error = sign_up(data, role)
             if error:
                 return self.fail(HTTPStatus.BAD_REQUEST, error)
