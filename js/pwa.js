@@ -95,6 +95,11 @@
       }
       const offerUpdate = (worker) => {
         if (!navigator.serviceWorker.controller) return;   // primera instalación: nada que actualizar
+        if (['localhost', '127.0.0.1'].includes(location.hostname)) { // desarrollo: se aplica sola
+          sessionStorage.setItem('sa-updating', '1');
+          worker.postMessage({ type: 'SKIP_WAITING' });
+          return;
+        }
         const el = toast('Hay una versión nueva de SilverAid. ', 'info', 60000);
         const b = document.createElement('button');
         b.className = 'btn small'; b.textContent = 'Actualizar';

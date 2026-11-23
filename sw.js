@@ -8,10 +8,12 @@
      POST/PUT/DELETE /api/…      siempre a la red; si no hay conexión, la página las deja en la cola de
                                  IndexedDB (js/db.js) y este service worker las envía al volver (Background Sync)
 
-   Al publicar cambios en páginas o scripts, suba VERSION (y el ?v= de los HTML) para renovar las cachés. */
+   BUILD lo sustituye server.py al servir este archivo por la hora en que arrancó el servidor: cada arranque es
+   una versión nueva del service worker, que borra las cachés anteriores y vuelve a descargar todo. */
 importScripts('js/db.js?v=10');
 
-const VERSION = 'v19';
+const BUILD = 'dev'; // server.py → hora de arranque
+const VERSION = `v19-${BUILD}`;
 const STATIC = `sa-static-${VERSION}`;
 const PAGES = `sa-pages-${VERSION}`;
 const API = 'sa-api';
@@ -30,13 +32,14 @@ const STATIC_URLS = [
   'assets/brand/silveraid-horizontal-color.svg', 'assets/brand/silveraid-horizontal-negativo.svg',
   'assets/brand/silveraid-vertical-color.svg', 'assets/brand/silveraid-simbolo-color.svg',
   'assets/brand/silveraid-icono-app.svg', 'assets/icons/icon-192.png', 'assets/icons/icon-512.png',
-].map((u) => (/\.(css|js)$/.test(u) ? `${u}?v=10` : u));
+];
 
 // ------------------------------------------------------------------ instalación y activación
 self.addEventListener('install', (event) => {
   event.waitUntil((async () => {
     const [pages, stat] = await Promise.all([caches.open(PAGES), caches.open(STATIC)]);
-    await Promise.all([pages.addAll(PAGE_URLS), stat.addAll(STATIC_URLS)]);
+    const fresh = (urls) => urls.map((u) => new Request(u, { cache: 'reload' })); // sin pasar por la caché HTTP
+    await Promise.all([pages.addAll(fresh(PAGE_URLS)), stat.addAll(fresh(STATIC_URLS))]);
   })());
   // La nueva versión espera a que la página acepte actualizar (mensaje SKIP_WAITING), salvo la primera vez.
 });

@@ -51,6 +51,7 @@ from pathlib import Path
 from urllib.parse import unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parent
+BUILD = str(int(time.time()))  # hora de arranque: versión de sw.js (ver send_service_worker)
 DATA = Path(os.environ.get("DATA_DIR") or ROOT / "data")
 HOST = os.environ.get("HOST", "127.0.0.1")
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", "8000"))
@@ -912,6 +913,16 @@ class Handler(SimpleHTTPRequestHandler):
         super().end_headers()
 
     # --- archivos estáticos
+    def send_service_worker(self):
+        """sw.js con BUILD = hora de arranque: cada arranque del servidor renueva las cachés del navegador."""
+        body = (ROOT / "sw.js").read_text(encoding="utf-8")
+        body = body.replace("const BUILD = 'dev';", f"const BUILD = '{BUILD}';", 1).encode("utf-8")
+        self.send_response(HTTPStatus.OK)
+        self.send_header("Content-Type", "text/javascript; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def is_public(self, path):
         return path in PUBLIC_FILES or path.startswith(PUBLIC_DIRS)
 
@@ -926,6 +937,8 @@ class Handler(SimpleHTTPRequestHandler):
         if not path.startswith("/api/"):
             if not self.is_public(path):
                 return self.send_error(HTTPStatus.NOT_FOUND)
+            if path == "/sw.js":
+                return self.send_service_worker()
             return super().do_GET()
 
         if path == "/api/me":
