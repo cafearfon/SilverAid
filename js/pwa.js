@@ -61,7 +61,7 @@
       banner = document.createElement('div');
       banner.className = 'net-banner';
       banner.setAttribute('role', 'status');
-      document.body.prepend(banner);
+      (document.querySelector('.app-shell') || document.body).prepend(banner); // en usuario.html, dentro del teléfono
     }
     const offline = !navigator.onLine;
     banner.hidden = !offline && !pending;

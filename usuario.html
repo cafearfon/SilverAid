@@ -15,10 +15,10 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=12">
+  <link rel="stylesheet" href="css/styles.css?v=13">
   <script src="js/auth.js?v=10"></script>
   <script src="js/db.js?v=10"></script>
-  <script src="js/pwa.js?v=12"></script>
+  <script src="js/pwa.js?v=13"></script>
   <script>
     // Página exclusiva del adulto mayor (rol «usuario»); el resto de roles va a su propia página.
     (function () {
@@ -28,115 +28,119 @@
     })();
   </script>
 </head>
-<body class="elder-page">
-  <header class="topbar">
-    <a class="brand" href="#home" aria-label="SilverAid, ir al inicio">
-      <img class="logo logo-color" src="assets/brand/silveraid-horizontal-color.svg" alt="SilverAid" width="187" height="48">
-      <img class="logo logo-negativo" src="assets/brand/silveraid-horizontal-negativo.svg" alt="SilverAid" width="187" height="48">
-    </a>
-    <div class="a11y">
-      <button id="btn-big" class="chip" aria-pressed="false">A+ Texto grande</button>
-      <button id="btn-contrast" class="chip" aria-pressed="false">◐ Alto contraste</button>
-      <span class="chip user-chip" id="user-chip"></span>
-      <button id="btn-logout" class="chip">Salir ⎋</button>
-    </div>
-  </header>
-
-  <nav class="tabs elder-tabs app-nav" id="tabs" aria-label="Secciones">
-    <button data-view="home" class="active"><span class="tab-ico" aria-hidden="true">🏠</span> <span>Inicio</span></button>
-    <button data-view="meds"><span class="tab-ico" aria-hidden="true">💊</span> <span>Mis dosis</span></button>
-    <button data-view="appts"><span class="tab-ico" aria-hidden="true">📅</span> <span>Mis citas</span></button>
-    <button data-view="sos" class="tab-sos"><span class="tab-ico" aria-hidden="true">🆘</span> <span>Ayuda</span></button>
-  </nav>
-
-  <main>
-    <!-- ============ INICIO ============ -->
-    <section id="view-home" class="view active">
-      <div class="hero">
-        <div>
-          <h1 id="greeting">Hola</h1>
-          <p id="today-date"></p>
-        </div>
-        <img class="hero-symbol" src="assets/brand/silveraid-simbolo-color.svg" alt="" width="112" height="112">
+<body class="elder-page elder-app">
+  <!-- La página imita la aplicación del teléfono que se muestra en la portada: en el ordenador aparece dentro
+       de un marco de teléfono y en el móvil ocupa toda la pantalla. -->
+  <img class="app-deco" src="assets/brand/silveraid-simbolo-color.svg" alt="" width="260" height="260" aria-hidden="true">
+  <div class="app-shell">
+    <div class="phone-bar" aria-hidden="true"><span></span></div>
+    <header class="topbar">
+      <a class="brand" href="#home" aria-label="SilverAid, ir al inicio">
+        <img class="logo logo-color" src="assets/brand/silveraid-horizontal-color.svg" alt="SilverAid" width="187" height="48">
+        <img class="logo logo-negativo" src="assets/brand/silveraid-horizontal-negativo.svg" alt="SilverAid" width="187" height="48">
+      </a>
+      <div class="a11y">
+        <span class="chip user-chip" id="user-chip"></span>
+        <button id="btn-big" class="chip" aria-pressed="false">A+ Texto grande</button>
+        <button id="btn-contrast" class="chip" aria-pressed="false">◐ Alto contraste</button>
+        <button id="btn-logout" class="chip">Salir ⎋</button>
       </div>
-      <div class="grid">
-        <article class="card"><h2>💊 Próxima dosis</h2><div id="home-next-dose"></div></article>
-        <article class="card"><h2>📅 Próxima cita</h2><div id="home-next-appt"></div></article>
-        <article class="card sos-card">
-          <h2>🆘 ¿Necesita ayuda?</h2>
-          <p>Avisa a su familia y a la central de SilverAid con su ubicación.</p>
-          <button class="btn danger big" data-action="sos">Pedir ayuda</button>
+    </header>
+
+    <main id="app-main">
+      <!-- ============ INICIO ============ -->
+      <section id="view-home" class="view active">
+        <h1 class="app-hello" id="greeting">Hola</h1>
+        <p class="app-date" id="today-date"></p>
+
+        <article class="mini-card">
+          <span class="mini-label">💊 Próxima dosis</span>
+          <div id="home-next-dose"></div>
         </article>
-      </div>
-    </section>
+        <article class="mini-card">
+          <span class="mini-label">📅 Próxima cita</span>
+          <div id="home-next-appt"></div>
+        </article>
 
-    <!-- ============ DOSIS ============ -->
-    <section id="view-meds" class="view">
-      <h1>💊 Mis dosis de hoy</h1>
-      <p class="muted">Pulse «Ya la tomé» después de cada toma. Si una dosis pasa 30 minutos sin confirmarse, se avisa a su familia.</p>
-      <div class="row-actions">
-        <button class="btn ghost" id="btn-notify">🔔 Activar avisos en este teléfono</button>
-      </div>
-      <ul id="dose-list" class="dose-list"></ul>
+        <div class="app-sos-wrap">
+          <button class="app-sos" data-action="sos" aria-label="Pedir ayuda de emergencia">AYUDA</button>
+          <p class="mini-sub">Avisa a su familia y a la central de SilverAid con su ubicación.</p>
+        </div>
+      </section>
 
-      <details class="card manage">
-        <summary>⚙️ Mis medicamentos</summary>
-        <ul id="med-list" class="list"></ul>
-        <form id="form-med" class="form compact">
-          <h2>Añadir medicamento</h2>
-          <label>Nombre <input name="name" required placeholder="Ej. Paracetamol"></label>
-          <label>Dosis <input name="dose" placeholder="Ej. 1 comprimido"></label>
-          <label>Horas (separadas por comas) <input name="times" required placeholder="08:00, 20:00"></label>
-          <button class="btn">Añadir</button>
-        </form>
-      </details>
-    </section>
+      <!-- ============ DOSIS ============ -->
+      <section id="view-meds" class="view">
+        <h1 class="app-title">💊 Mis dosis de hoy</h1>
+        <p class="mini-sub">Pulse «Ya la tomé» después de cada toma. Si una dosis pasa 30 minutos sin confirmarse, se avisa a su familia.</p>
+        <ul id="dose-list" class="dose-list"></ul>
+        <button class="btn ghost app-wide" id="btn-notify">🔔 Activar avisos en este teléfono</button>
 
-    <!-- ============ CITAS ============ -->
-    <section id="view-appts" class="view">
-      <h1>📅 Mis citas</h1>
-      <p class="muted">Sus próximas citas médicas, de la más cercana a la más lejana.</p>
-      <ul id="appt-list" class="appt-list"></ul>
+        <details class="mini-card manage">
+          <summary>⚙️ Mis medicamentos</summary>
+          <ul id="med-list" class="list"></ul>
+          <form id="form-med" class="form compact">
+            <h2>Añadir medicamento</h2>
+            <label>Nombre <input name="name" required placeholder="Ej. Paracetamol"></label>
+            <label>Dosis <input name="dose" placeholder="Ej. 1 comprimido"></label>
+            <label>Horas (separadas por comas) <input name="times" required placeholder="08:00, 20:00"></label>
+            <button class="btn">Añadir</button>
+          </form>
+        </details>
+      </section>
 
-      <details class="card manage">
-        <summary>➕ Añadir una cita</summary>
-        <form id="form-appt" class="form compact">
-          <label>Motivo <input name="title" required placeholder="Ej. Análisis de sangre"></label>
-          <div class="form-row">
-            <label>Fecha <input type="date" name="date" required></label>
-            <label>Hora <input type="time" name="time" required value="10:00"></label>
-          </div>
-          <label>Lugar <input name="place" placeholder="Ej. Centro de Salud"></label>
-          <label>Me acompaña <select name="who" id="appt-who"></select></label>
-          <button class="btn">Guardar cita</button>
-        </form>
-      </details>
-    </section>
+      <!-- ============ CITAS ============ -->
+      <section id="view-appts" class="view">
+        <h1 class="app-title">📅 Mis citas</h1>
+        <p class="mini-sub">Sus próximas citas médicas, de la más cercana a la más lejana.</p>
+        <ul id="appt-list" class="appt-list"></ul>
 
-    <!-- ============ AYUDA / BOTÓN DE PÁNICO ============ -->
-    <section id="view-sos" class="view">
-      <h1>🆘 Pedir ayuda</h1>
-      <p>Pulse el botón rojo para avisar a su familia y a la central de SilverAid con su ubicación. Tendrá 5 segundos para cancelar.</p>
-      <div class="sos-wrap">
-        <button class="btn-sos" data-action="sos" aria-label="Pedir ayuda de emergencia">AYUDA</button>
-      </div>
-      <div class="grid two">
-        <article class="card">
-          <h2>📞 Se avisará a</h2>
+        <details class="mini-card manage">
+          <summary>➕ Añadir una cita</summary>
+          <form id="form-appt" class="form compact">
+            <label>Motivo <input name="title" required placeholder="Ej. Análisis de sangre"></label>
+            <div class="form-row">
+              <label>Fecha <input type="date" name="date" required></label>
+              <label>Hora <input type="time" name="time" required value="10:00"></label>
+            </div>
+            <label>Lugar <input name="place" placeholder="Ej. Centro de Salud"></label>
+            <label>Me acompaña <select name="who" id="appt-who"></select></label>
+            <button class="btn">Guardar cita</button>
+          </form>
+        </details>
+      </section>
+
+      <!-- ============ AYUDA / BOTÓN DE PÁNICO ============ -->
+      <section id="view-sos" class="view">
+        <h1 class="app-title">🆘 Pedir ayuda</h1>
+        <p class="mini-sub">Pulse el botón rojo para avisar a su familia y a la central de SilverAid con su ubicación. Tendrá 5 segundos para cancelar.</p>
+        <div class="app-sos-wrap">
+          <button class="app-sos large" data-action="sos" aria-label="Pedir ayuda de emergencia">AYUDA</button>
+        </div>
+        <article class="mini-card">
+          <span class="mini-label">📞 Se avisará a</span>
           <ul id="sos-contacts" class="list"></ul>
         </article>
-        <article class="card">
-          <h2>📉 Detección de caídas</h2>
+        <article class="mini-card">
+          <span class="mini-label">📉 Detección de caídas</span>
           <label class="switch"><input type="checkbox" id="fall-toggle"> Activar con el sensor del teléfono</label>
-          <p class="muted" id="fall-status">Desactivada.</p>
-          <button class="btn ghost" id="btn-sim-fall">Probar: simular una caída</button>
+          <p class="mini-sub" id="fall-status">Desactivada.</p>
+          <button class="btn ghost app-wide" id="btn-sim-fall">Probar: simular una caída</button>
         </article>
-      </div>
-    </section>
-  </main>
+      </section>
+    </main>
 
-  <!-- Botón de ayuda siempre a mano (se oculta en la sección Ayuda) -->
-  <button class="sos-float" id="sos-float" data-action="sos" aria-label="Pedir ayuda de emergencia">🆘 AYUDA</button>
+    <!-- Botón de ayuda siempre a mano (en Inicio y Ayuda ya está el botón grande) -->
+    <button class="sos-float" id="sos-float" data-action="sos" aria-label="Pedir ayuda de emergencia">🆘 AYUDA</button>
+
+    <nav class="tabs elder-tabs app-nav" id="tabs" aria-label="Secciones">
+      <button data-view="home" class="active"><span class="tab-ico" aria-hidden="true">🏠</span> <span>Inicio</span></button>
+      <button data-view="meds"><span class="tab-ico" aria-hidden="true">💊</span> <span>Dosis</span></button>
+      <button data-view="appts"><span class="tab-ico" aria-hidden="true">📅</span> <span>Citas</span></button>
+      <button data-view="sos" class="tab-sos"><span class="tab-ico" aria-hidden="true">🆘</span> <span>Ayuda</span></button>
+    </nav>
+
+    <div id="toasts" class="toasts" aria-live="polite"></div>
+  </div>
 
   <!-- Ventana de cuenta atrás (SOS / caída) -->
   <div id="overlay" class="overlay" hidden role="alertdialog" aria-modal="true" aria-labelledby="ov-title">
@@ -148,11 +152,9 @@
     </div>
   </div>
 
-  <div id="toasts" class="toasts" aria-live="polite"></div>
-
   <script src="js/store.js?v=10"></script>
   <script src="js/meds.js?v=10"></script>
   <script src="js/sos.js?v=12"></script>
-  <script src="js/usuario.js?v=10"></script>
+  <script src="js/usuario.js?v=11"></script>
 </body>
 </html>

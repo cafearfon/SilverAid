@@ -9,8 +9,9 @@
     if (!VIEWS.includes(name)) name = 'home';
     document.querySelectorAll('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + name));
     document.querySelectorAll('#tabs button').forEach((b) => b.classList.toggle('active', b.dataset.view === name));
-    $('sos-float').hidden = name === 'sos'; // en «Ayuda» ya está el botón grande
+    $('sos-float').hidden = name === 'sos' || name === 'home'; // ahí ya está el botón grande
     if (location.hash !== '#' + name) history.replaceState(null, '', '#' + name);
+    $('app-main').scrollTop = 0; // en el ordenador la página se desplaza dentro del marco del teléfono
     window.scrollTo(0, 0);
   };
 
@@ -28,30 +29,41 @@
     const n = daysUntil(key);
     return n === 0 ? 'Hoy' : n === 1 ? 'Mañana' : `En ${n} días`;
   };
+  /** «Hoy», «Mañana», el día de la semana si es esta semana («Jueves») o la fecha. */
+  const dayName = (key) => {
+    const n = daysUntil(key);
+    if (n < 2) return whenText(key);
+    const text = n < 7 ? new Date(key + 'T00:00').toLocaleDateString('es-ES', { weekday: 'long' }) : SA.fmtDate(key);
+    return text.replace(/^./, (c) => c.toUpperCase());
+  };
 
   // ---------- Inicio ----------
   function renderHome() {
     const h = new Date().getHours();
     const saludo = h < 13 ? 'Buenos días' : h < 21 ? 'Buenas tardes' : 'Buenas noches';
-    $('greeting').textContent = `${saludo}, ${SA.state.user.name} 👋`;
+    $('greeting').textContent = `${saludo}, ${SA.state.user.name.split(' ')[0]} 👋`;
     $('today-date').textContent = SA.fmtDate(SA.dateKey()).replace(/^./, (c) => c.toUpperCase());
 
     const doses = SA.doses();
     const taken = doses.filter((x) => x.status === 'taken').length;
     const d = SA.nextDose();
+    // Mismo diseño que la vista previa de la portada: dato en negrita, detalle debajo y botón verde.
     $('home-next-dose').innerHTML = (d
-      ? `<p class="big-text">${d.time} · ${SA.esc(d.med.name)}</p><p class="muted">${SA.esc(d.med.dose)}</p>
-         ${d.status === 'due' ? `<button class="btn ok big" data-take="${d.key}">✔ Ya la tomé</button>` : ''}`
-      : '<p class="big-text">✅ Todo tomado</p>')
-      + `<p class="muted">Hoy: ${taken} de ${doses.length} tomas confirmadas.</p>
-         <button class="btn ghost" data-goto="meds">Ver mis dosis</button>`;
+      ? `<strong class="mini-main">${d.time} · ${SA.esc(d.med.name)}</strong>
+         ${d.med.dose ? `<span class="mini-sub">${SA.esc(d.med.dose)}</span>` : ''}
+         ${d.status === 'due' ? `<button class="mini-btn" data-take="${d.key}">✔ Ya la tomé</button>` : ''}`
+      : '<strong class="mini-main">✅ Todo tomado</strong>')
+      + `<span class="mini-foot"><span class="mini-sub">Hoy: ${taken} de ${doses.length} tomadas</span>
+         <button class="mini-link" data-goto="meds">Ver dosis ›</button></span>`;
 
     const a = SA.upcomingAppointments()[0];
     $('home-next-appt').innerHTML = a
-      ? `<p class="big-text">${SA.esc(a.title)}</p>
-         <p class="muted"><strong>${whenText(a.date)}</strong> · ${SA.fmtDate(a.date)} · ${a.time}<br>${SA.esc(a.place)}${a.who ? ' · con ' + SA.esc(a.who) : ''}</p>
-         <button class="btn ghost" data-goto="appts">Ver mis citas</button>`
-      : '<p class="muted">No tiene citas próximas.</p><button class="btn ghost" data-goto="appts">Añadir una cita</button>';
+      ? `<strong class="mini-main">${SA.esc(a.title)}</strong>
+         <span class="mini-sub">${dayName(a.date)} · ${a.time}${a.who ? ' · con ' + SA.esc(a.who) : ''}</span>
+         <span class="mini-foot"><span class="mini-sub">${a.place ? '📍 ' + SA.esc(a.place) : ''}</span>
+         <button class="mini-link" data-goto="appts">Ver citas ›</button></span>`
+      : `<span class="mini-foot"><span class="mini-sub">No tiene citas próximas.</span>
+         <button class="mini-link" data-goto="appts">Añadir ›</button></span>`;
   }
 
   // ---------- Citas ----------
