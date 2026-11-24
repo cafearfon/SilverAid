@@ -52,7 +52,7 @@ El service worker necesita `http://localhost` o HTTPS: para instalarla en un tel
 
 ## Cómo ejecutarlo
 
-Necesita Python 3 (sin librerías adicionales):
+Necesita Python 3 (sin librerías adicionales en modo txt; con MySQL o MongoDB, `pip install -r requirements.txt`):
 
 ```bash
 python server.py          # o: python server.py 8080
@@ -130,8 +130,38 @@ Archivos de datos (en `data/`, fuera de git):
 | `states.txt` | `usuario;actualizado;contenido` — datos de la aplicación de cada usuario sincronizados desde IndexedDB (JSON en base64; `actualizado` = marca de tiempo en ms del último cambio) |
 - Cada usuario tiene sus propios datos de demo (medicamentos, citas, etc.), guardados en el dispositivo y sincronizados con el servidor.
 
-⚠️ Las contraseñas se guardan **en texto plano**: es un demo educativo, no lo use con contraseñas reales.
+Las contraseñas se guardan como **hash PBKDF2-SHA256 con sal** (`pbkdf2_sha256$iteraciones$sal$hash`); al arrancar,
+el servidor convierte las que sigan en texto plano de versiones anteriores.
 `data/` está en `.gitignore` para que no se suban al repositorio, y el servidor nunca entrega ese archivo por HTTP.
+
+### Almacenamiento: txt, MySQL o MongoDB
+
+La variable `STORAGE` elige dónde se guardan los datos: `txt` (por defecto, los archivos de arriba), `mysql`
+(`docker-compose.yml`) o `mongo` (`docker-compose.mongo.yml`). Con MongoDB (`mongo_store.py`) cada tabla es una
+colección con nombres en inglés y tipos reales:
+
+| Colección | Contenido |
+|-----------|-----------|
+| `users` | Una cuenta por persona: `username` (único, sin distinguir mayúsculas), `passwordHash`, `name`, `role`, `status`, `registeredBy`, `registeredAt`, `idDocument {type, number}`, `contact {address, phone, mobile, email}`, `elder {bloodType, clientId, health {diseases[], mobility}}`, `worker {education, driving {license, vehicle, categories[]}, socialSecurity}`, `catalogSent {at, channel}`, `documents {…: {fileName}, titulos: [...]}` |
+| `caregivers` | Ficha de cada cuidador: `code`, `name`, `idNumber`, `birthDate`, `contact`, `zone`, `title`, `yearsExperience`, `skills[]`, `availability {lun: [8, 9], …}`, `userId`, `registeredAt` |
+| `family` | `elderId` ↔ `memberId`, `relation`, `status`, `requestedBy`, `requestedAt` |
+| `attachments` | PDF en binario: `userId`, `kind`, `fileName`, `uploadedAt`, `contentType`, `data` |
+| `appStates` | Datos de la app de cada usuario: `userId`, `updatedAt` (ms), `data {…}` |
+| `sosCalls` | `code`, `createdAt`, `userId`, `username`, `name`, `reason`, `location` (GeoJSON), `status`, `attendedBy`, `attendedAt`, `note` |
+| `services` | `code`, `name`, `description`, `price`, `active` |
+| `sessions` | Sesiones abiertas (SHA-256 del token, `userId`, `createdAt`); caducan solas a los 30 días |
+
+Las referencias entre cuentas son `ObjectId` de `users`. Cada colección tiene un validador `$jsonSchema` e índices
+(usuario único, documento de identidad, `elderId + memberId` único, `userId + kind` único…).
+
+```bash
+# Arrancar con MongoDB (variables: MONGO_HOST, MONGO_PORT, MONGO_USER, MONGO_PASSWORD, MONGO_DATABASE o MONGO_URI)
+STORAGE=mongo MONGO_HOST=192.168.1.16 MONGO_USER=silveraid MONGO_PASSWORD=... python server.py
+# Copiar los datos de MySQL (o de los .txt de DATA_DIR) a MongoDB; --replace sustituye lo que ya haya
+STORAGE=mongo ... python server.py import mysql
+```
+
+La primera vez que arranca con una base vacía, importa los `.txt` de `DATA_DIR` si existen (o crea los datos de ejemplo).
 
 **GitHub Pages:** la landing page se ve completa, pero como Pages solo sirve archivos estáticos, allí no hay servidor y no se puede iniciar sesión
 (la página de login lo indica). Para usar el login, ejecute `server.py` en su equipo.
@@ -152,7 +182,8 @@ Archivos de datos (en `data/`, fuera de git):
 ## Estructura
 
 ```
-server.py          servidor local: archivos + API (datos en data/*.txt)
+server.py          servidor local: archivos + API (datos en data/*.txt, MySQL o MongoDB)
+mongo_store.py     almacenamiento en MongoDB (STORAGE=mongo): colecciones, validadores e índices
 index.html         landing page
 login.html         inicio de sesión y registro
 app.html           aplicación (requiere sesión)

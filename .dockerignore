@@ -4,9 +4,11 @@
 .env.*
 data/
 mysql-data/
+mongo-data/
 __pycache__/
 *.pyc
 README.md
 docker-compose.yml
+docker-compose.mongo.yml
 Dockerfile
 .dockerignore

@@ -1,3 +1,4 @@
-# Solo se necesita con STORAGE=mysql (Docker). En modo txt server.py no usa dependencias.
+# Solo se necesitan con STORAGE=mysql o STORAGE=mongo (Docker). En modo txt server.py no usa dependencias.
 # El extra [rsa] instala «cryptography», necesaria para la autenticación por defecto de MySQL 8.
 PyMySQL[rsa]==1.1.1
+pymongo==4.20.1

@@ -1,0 +1,48 @@
+# SilverAid con MongoDB.
+#   1. cp .env.example .env   y cambie las contraseñas (MONGO_ROOT_PASSWORD y ADMIN_PASSWORD)
+#   2. docker compose -f docker-compose.mongo.yml up -d --build
+#   3. abra http://IP-DEL-NAS:8000   (usuario admin, contraseña ADMIN_PASSWORD)
+# Para traer los datos de la versión con MySQL (con los dos contenedores de MySQL aún disponibles):
+#   docker compose -f docker-compose.mongo.yml run --rm -e MYSQL_HOST=... -e MYSQL_PASSWORD=... app python server.py import mysql
+services:
+  db:
+    image: mongo:8.0
+    container_name: silveraid_db
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER:-silveraid}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Defina MONGO_ROOT_PASSWORD en .env}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-silveraid}
+      TZ: ${TZ:-America/Bogota}
+    volumes:
+      - ./mongo-data:/data/db            # datos de MongoDB en una carpeta del NAS (incluir en copias de seguridad)
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 30s
+    # Sin «ports»: MongoDB solo es accesible desde la aplicación. Para administrarlo desde la red local
+    # (Compass, mongosh), añada  ports: ["27017:27017"]  y use una contraseña fuerte.
+
+  app:
+    build: .
+    image: silveraid:latest
+    container_name: silveraid-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      STORAGE: mongo
+      MONGO_HOST: db
+      MONGO_PORT: 27017
+      MONGO_USER: ${MONGO_ROOT_USER:-silveraid}
+      MONGO_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_DATABASE: ${MONGO_DATABASE:-silveraid}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:?Defina ADMIN_PASSWORD en .env}
+      TZ: ${TZ:-America/Bogota}
+    ports:
+      - "${APP_PORT:-8000}:8000"
+    volumes:
+      - ./data:/data:ro                  # opcional: .txt de la versión anterior, se importan al crear las colecciones

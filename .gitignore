@@ -27,3 +27,4 @@ data/
 # Docker: secretos y datos de MySQL
 .env
 mysql-data/
+mongo-data/

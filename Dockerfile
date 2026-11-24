@@ -1,4 +1,4 @@
-# SilverAid — imagen de la aplicación (usa MySQL; ver docker-compose.yml)
+# SilverAid — imagen de la aplicación (MySQL: docker-compose.yml; MongoDB: docker-compose.mongo.yml)
 FROM python:3.12-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -10,7 +10,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Páginas, service worker y manifiesto de la aplicación instalable (PWA)
-COPY server.py *.html sw.js manifest.webmanifest ./
+COPY server.py mongo_store.py *.html sw.js manifest.webmanifest ./
 COPY css ./css
 COPY js ./js
 COPY assets ./assets

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """SilverAid — servidor.
 
-Sirve la aplicación y una pequeña API. Los datos se guardan en tres tablas:
+Sirve la aplicación y una pequeña API. Los datos se guardan en estas tablas:
 
     users        usuario;contraseña;nombre;rol;estado;registrado_por;fecha_registro;
                  direccion;telefono;celular;email;tipo_sangre;cliente  (ficha del adulto mayor);
@@ -23,6 +23,13 @@ Almacenamiento (variable STORAGE):
     txt    (por defecto) archivos de texto en DATA_DIR: users.txt, caregivers.txt, family.txt, sos.txt, services.txt
     mysql  base de datos MySQL (MYSQL_HOST, MYSQL_PORT, MYSQL_USER, MYSQL_PASSWORD, MYSQL_DATABASE).
            Al crear las tablas por primera vez se importan los .txt de DATA_DIR si existen.
+    mongo  base de datos MongoDB (MONGO_HOST, MONGO_PORT, MONGO_USER, MONGO_PASSWORD, MONGO_DATABASE, o MONGO_URI).
+           Colecciones con nombres en inglés y tipos reales: ver mongo_store.py. Al crearlas por primera vez se
+           importan los .txt de DATA_DIR si existen. Para copiar los datos de MySQL (o de los .txt):
+               STORAGE=mongo python server.py import mysql|txt [--replace]
+
+Las contraseñas se guardan como hash PBKDF2-SHA256 con sal; al arrancar se convierten las que sigan en texto plano.
+Con mongo las sesiones se guardan en la base de datos (caducan a los 30 días); con txt y mysql, en memoria.
 
 Otras variables: HOST (127.0.0.1), PORT (8000), DATA_DIR (./data),
                  ADMIN_PASSWORD (contraseña inicial de «admin»; por defecto «admin»).
@@ -55,7 +62,7 @@ ROOT = Path(__file__).resolve().parent
 BUILD = str(int(time.time()))  # hora de arranque: versión de sw.js (ver send_service_worker)
 DATA = Path(os.environ.get("DATA_DIR") or ROOT / "data")
 HOST = os.environ.get("HOST", "127.0.0.1")
-PORT = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", "8000"))
+PORT = int(sys.argv[1]) if len(sys.argv) > 1 and sys.argv[1].isdigit() else int(os.environ.get("PORT", "8000"))
 STORAGE = os.environ.get("STORAGE", "txt").lower()
 ADMIN_PASSWORD = os.environ.get("ADMIN_PASSWORD") or "admin"
 MYSQL = {
@@ -65,8 +72,8 @@ MYSQL = {
     "password": os.environ.get("MYSQL_PASSWORD", ""),
     "database": os.environ.get("MYSQL_DATABASE", "silveraid"),
 }
-if STORAGE not in ("txt", "mysql"):
-    sys.exit(f"STORAGE debe ser «txt» o «mysql» (se recibió «{STORAGE}»).")
+if STORAGE not in ("txt", "mysql", "mongo"):
+    sys.exit(f"STORAGE debe ser «txt», «mysql» o «mongo» (se recibió «{STORAGE}»).")
 
 # Solo se sirven estos archivos y carpetas (nunca data/, server.py ni .git/).
 PUBLIC_FILES = {"/", "/index.html", "/app.html", "/login.html", "/admin.html", "/usuario.html", "/favicon.ico",
@@ -128,7 +135,65 @@ def week(days, start, end):
 USERNAME_RE = re.compile(r"^[A-Za-z0-9_.-]{3,30}$")
 
 lock = threading.Lock()
-sessions = {}  # token -> nombre de usuario (en minúsculas)
+
+
+class MemorySessions:
+    """Sesiones en memoria (txt y mysql): token → nombre de usuario en minúsculas. Se pierden al reiniciar."""
+
+    def __init__(self):
+        self.tokens = {}
+
+    def setup(self):
+        pass
+
+    def get(self, token):
+        return self.tokens.get(token)
+
+    def add(self, token, username):
+        self.tokens[token] = username.lower()
+
+    def remove(self, token):
+        self.tokens.pop(token, None)
+
+    def drop_user(self, username):
+        for token, key in list(self.tokens.items()):
+            if key == username.lower():
+                del self.tokens[token]
+
+
+# ------------------------------------------------------------ contraseñas
+# Se guardan como PBKDF2-SHA256 con sal: «pbkdf2_sha256$iteraciones$sal$hash» (sal y hash en base64).
+# Al arrancar, las contraseñas que sigan en texto plano (versiones anteriores) se convierten.
+PBKDF2_ITERATIONS = 600_000
+
+
+def hash_password(password):
+    salt = secrets.token_bytes(16)
+    digest = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, PBKDF2_ITERATIONS)
+    return f"pbkdf2_sha256${PBKDF2_ITERATIONS}${base64.b64encode(salt).decode()}${base64.b64encode(digest).decode()}"
+
+
+def is_hashed(stored):
+    return stored.startswith("pbkdf2_sha256$")
+
+
+def check_password(stored, password):
+    try:
+        algorithm, iterations, salt, digest = stored.split("$")
+        if algorithm != "pbkdf2_sha256":
+            return False
+        computed = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), base64.b64decode(salt), int(iterations))
+        return secrets.compare_digest(computed, base64.b64decode(digest))
+    except ValueError:  # formato desconocido (o texto plano que aún no se convirtió)
+        return False
+
+
+def hash_plain_passwords(users):
+    """Convierte las contraseñas en texto plano. Devuelve cuántas cambió."""
+    plain = [u for u in users if u.get("contraseña") and not is_hashed(u["contraseña"])]
+    for u in plain:
+        u["contraseña"] = hash_password(u["contraseña"])
+    return len(plain)
 
 
 def now():
@@ -142,8 +207,16 @@ def clean(value, limit=300):
 
 
 # ------------------------------------------------------------ almacenamiento
-# Las dos implementaciones ofrecen lo mismo: read() → lista de diccionarios y write(lista).
-# Todas las llamadas se hacen dentro de `lock`, así que no hay escrituras simultáneas.
+# Las tres implementaciones (txt, MySQL y MongoDB, en mongo_store.py) ofrecen lo mismo: read() → lista de
+# diccionarios y write(lista). Con owner (nombre de usuario), read(owner=…) y write(filas, owner=…) solo tocan las
+# filas de ese usuario (adjuntos y estados de la app, campo «usuario»): MongoDB lo resuelve con una consulta y los
+# .txt y MySQL leen todo y filtran. Todas las llamadas se hacen dentro de `lock`: no hay escrituras simultáneas.
+
+def owned(rows, owner, keep=True):
+    """Filas de ese usuario (keep=True) o las de los demás (keep=False)."""
+    key = owner.lower()
+    return [r for r in rows if (r["usuario"].lower() == key) == keep]
+
 
 class TextTable:
     """Archivo de texto con una cabecera «# campo;campo;…» y una línea por registro."""
@@ -156,12 +229,15 @@ class TextTable:
     def setup(self):
         self.read()
 
-    def read(self):
+    def read(self, owner=None):
         if not self.path.exists():
             self.write([dict(zip(self.fields, row)) for row in self.seed])
-        return read_text_rows(self.path, self.fields)
+        rows = read_text_rows(self.path, self.fields)
+        return rows if owner is None else owned(rows, owner)
 
-    def write(self, rows):
+    def write(self, rows, owner=None):
+        if owner is not None:
+            rows = owned(self.read(), owner, keep=False) + list(rows)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         lines = ["# " + ";".join(self.fields) + "\n"]
         lines += [";".join(row.get(f, "") for f in self.fields) + "\n" for row in rows]
@@ -239,18 +315,21 @@ class MySQLTable:
                 rows = [dict(zip(self.fields, row)) for row in self.seed]
             self.write(rows)
 
-    def read(self):
+    def read(self, owner=None):
         conn = mysql_connect()
         try:
             with conn.cursor() as cur:
                 cur.execute(f"SELECT {', '.join('`%s`' % self.cols[f] for f in self.fields)} "
                             f"FROM `{self.name}` ORDER BY `orden`")
-                return [{f: (v or "") for f, v in zip(self.fields, row)} for row in cur.fetchall()]
+                rows = [{f: (v or "") for f, v in zip(self.fields, row)} for row in cur.fetchall()]
         finally:
             conn.close()
+        return rows if owner is None else owned(rows, owner)
 
-    def write(self, rows):
-        """Reemplaza el contenido de la tabla en una sola transacción."""
+    def write(self, rows, owner=None):
+        """Reemplaza el contenido de la tabla (o, con owner, las filas de ese usuario) en una sola transacción."""
+        if owner is not None:
+            rows = owned(self.read(), owner, keep=False) + list(rows)
         names = [self.cols[f] for f in self.fields] + ["orden"]
         sql = (f"INSERT INTO `{self.name}` ({', '.join('`%s`' % n for n in names)}) "
                f"VALUES ({', '.join(['%s'] * len(names))})")
@@ -268,7 +347,26 @@ class MySQLTable:
             conn.close()
 
 
-Table = MySQLTable if STORAGE == "mysql" else TextTable
+if STORAGE == "mongo":
+    import mongo_store  # solo hace falta con STORAGE=mongo (pymongo)
+    from functools import partial
+
+    Table = partial(mongo_store.MongoTable, data_dir=DATA, text_reader=read_text_rows)
+    sessions = mongo_store.MongoSessions()
+else:
+    Table = MySQLTable if STORAGE == "mysql" else TextTable
+    sessions = MemorySessions()
+
+
+def wait_for_mongo(attempts=30):
+    for i in range(1, attempts + 1):
+        try:
+            mongo_store.ping()
+            return
+        except Exception as exc:  # noqa: BLE001 — cualquier fallo de conexión: reintentar
+            print(f"Esperando a {mongo_store.describe()} ({i}/{attempts}): {str(exc)[:160]}")
+            time.sleep(2)
+    sys.exit("No se pudo conectar con MongoDB.")
 
 
 def wait_for_mysql(attempts=30):
@@ -305,6 +403,8 @@ USERS = Table(
      "enfermedades", "movilidad"],
     seed=[("admin", ADMIN_PASSWORD, "Administrador", "admin", "activo", "", "")],
 )
+if STORAGE == "mongo":
+    USERS.prepare_rows = hash_plain_passwords  # MongoDB solo admite contraseñas con hash
 
 DOC_TYPES = {"CC": "Cédula de ciudadanía", "CE": "Cédula de extranjería",
              "PA": "Pasaporte", "PPT": "Permiso por protección temporal"}
@@ -699,7 +799,7 @@ def new_account(users, data, role, status, registered_by=""):
     if find_user(users, username):
         return None, "Ese usuario ya existe."
     user = {field: "" for field in USERS.fields}  # incluye los campos de la ficha, vacíos
-    user.update({"usuario": username, "contraseña": password, "nombre": name, "rol": role, "estado": status,
+    user.update({"usuario": username, "contraseña": hash_password(password), "nombre": name, "rol": role, "estado": status,
                  "registrado_por": registered_by, "fecha_registro": now()})
     users.append(user)
     return user, None
@@ -805,8 +905,6 @@ def sign_up(data, role, registered_by=""):
                              "Elija un nombre de usuario distinto al documento del adulto mayor.")
                 elif not elder["usuario"]:
                     error = "Ese adulto mayor ya está registrado en SilverAid."
-                elif data.get("selfElder"):
-                    elder["contraseña"] = str(data.get("password", ""))
         user = None
         if not error:
             # Cuidador y colaborador quedan en verificación hasta que el administrador revise sus documentos.
@@ -818,7 +916,11 @@ def sign_up(data, role, registered_by=""):
                 row = {field: "" for field in USERS.fields}
                 row.update(elder, rol="usuario", estado="pendiente", registrado_por=user["usuario"],
                            fecha_registro=now(), cliente=user["usuario"])
+                if data.get("selfElder"):  # el adulto mayor entra con la misma contraseña de su cuenta de cliente
+                    row["contraseña"] = user["contraseña"]
                 users.append(row)
+            # Primero la cuenta: la familia y los adjuntos se refieren a ella (en MongoDB, por su ObjectId).
+            USERS.write(users)
             if joined:
                 # Solicitud para unirse a la familia (activa si lo registra el administrador).
                 links = FAMILY.read()
@@ -827,9 +929,8 @@ def sign_up(data, role, registered_by=""):
                 FAMILY.write(links)
             if files:
                 key = user["usuario"].lower()
-                rows = [a for a in ATTACHMENTS.read() if a["usuario"].lower() != key]
-                ATTACHMENTS.write(rows + [{**f, "id": f"{key}:{kind}", "usuario": user["usuario"]} for kind, f in files.items()])
-            USERS.write(users)
+                ATTACHMENTS.write([{**f, "id": f"{key}:{kind}", "usuario": user["usuario"]} for kind, f in files.items()],
+                                  owner=key)
     if error:
         return None, error, None
     return user, None, joined
@@ -839,7 +940,7 @@ def read_state(username):
     """{state, updatedAt} guardado para el usuario; state es None si nunca sincronizó."""
     key = username.lower()
     with lock:
-        row = next((r for r in STATES.read() if r["usuario"] == key), None)
+        row = next(iter(STATES.read(owner=key)), None)
     if not row:
         return {"state": None, "updatedAt": 0}
     return {"state": json.loads(base64.b64decode(row["contenido"]).decode("utf-8")), "updatedAt": int(row["actualizado"] or 0)}
@@ -853,22 +954,18 @@ def write_state(username, data):
         return None, "Datos no válidos."
     key = username.lower()
     with lock:
-        rows = STATES.read()
-        row = next((r for r in rows if r["usuario"] == key), None)
+        row = next(iter(STATES.read(owner=key)), None)
         if not row or stamp > int(row["actualizado"] or 0):
             content = base64.b64encode(json.dumps(state, ensure_ascii=False).encode("utf-8")).decode("ascii")
             if len(content) > MAX_STATE_BYTES:
                 return None, "Los datos son demasiado grandes."
-            rows = [r for r in rows if r["usuario"] != key] + [{"usuario": key, "actualizado": str(stamp), "contenido": content}]
-            STATES.write(rows)
+            STATES.write([{"usuario": key, "actualizado": str(stamp), "contenido": content}], owner=key)
             return {"state": state, "updatedAt": stamp, "saved": True}, None
     return {**read_state(username), "saved": False}, None
 
 
 def drop_sessions(username):
-    for token, key in list(sessions.items()):
-        if key == username.lower():
-            del sessions[token]
+    sessions.drop_user(username)
 
 
 # ---------------------------------------------------------------------- HTTP
@@ -1072,7 +1169,7 @@ class Handler(SimpleHTTPRequestHandler):
             if self.auth("admin"):
                 key = f"{m.group(1).lower()}:{m.group(2)}"
                 with lock:
-                    doc = next((a for a in ATTACHMENTS.read() if a["id"] == key), None)
+                    doc = next((a for a in ATTACHMENTS.read(owner=m.group(1)) if a["id"] == key), None)
                 if not doc:
                     return self.fail(HTTPStatus.NOT_FOUND, "Esa persona no adjuntó ese archivo.")
                 self.send_json(HTTPStatus.OK, {"name": doc["nombre_archivo"], "type": "application/pdf",
@@ -1106,7 +1203,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self.upload_document(data)
 
         if path == "/api/logout":
-            sessions.pop(self.token(), None)
+            sessions.remove(self.token())
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
         if path == "/api/register":
@@ -1337,7 +1434,7 @@ class Handler(SimpleHTTPRequestHandler):
                     user.update(profile)
                 user["nombre"] = name
                 if new_password:
-                    user["contraseña"] = new_password
+                    user["contraseña"] = hash_password(new_password)
                 USERS.write(users)
             return self.send_json(HTTPStatus.OK, {"user": public_user(user)})
 
@@ -1376,13 +1473,14 @@ class Handler(SimpleHTTPRequestHandler):
                     return self.fail(HTTPStatus.BAD_REQUEST,
                                      f"{user['nombre']} es el cliente de {', '.join(held)}. Asigne otro cliente "
                                      "(pestaña «Familiares responsables» o Usuarios → Editar) antes de eliminar su cuenta.")
-                users.remove(user)
-                USERS.write(users)
+                # Primero lo que depende de la cuenta (en MongoDB se busca por su ObjectId) y al final la cuenta.
+                drop_sessions(target)
                 FAMILY.write(drop_links(FAMILY.read(), target))
                 if user["rol"] in ATTACHMENT_ROLES:
-                    ATTACHMENTS.write([a for a in ATTACHMENTS.read() if a["usuario"].lower() != target.lower()])
-                STATES.write([r for r in STATES.read() if r["usuario"] != target.lower()])
-            drop_sessions(target)
+                    ATTACHMENTS.write([], owner=target)
+                STATES.write([], owner=target)
+                users.remove(user)
+                USERS.write(users)
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
         m = re.fullmatch(r"/api/admin/services/([^/]+)", path)
@@ -1413,10 +1511,10 @@ class Handler(SimpleHTTPRequestHandler):
                     users = read_users()
                     account = find_user(users, cg["usuario"])
                     if account and account["rol"] == "cuidador":
+                        drop_sessions(cg["usuario"])
+                        ATTACHMENTS.write([], owner=cg["usuario"])
                         users.remove(account)
                         USERS.write(users)
-                        ATTACHMENTS.write([a for a in ATTACHMENTS.read() if a["usuario"].lower() != cg["usuario"].lower()])
-                        drop_sessions(cg["usuario"])
             return self.send_json(HTTPStatus.OK, {"ok": True})
 
         self.fail(HTTPStatus.NOT_FOUND, "Ruta no encontrada.")
@@ -1427,14 +1525,14 @@ class Handler(SimpleHTTPRequestHandler):
         password = str(data.get("password", ""))
         with lock:
             user = find_user(read_users(), username)
-        if not user or not user["contraseña"] or not secrets.compare_digest(user["contraseña"].encode(), password.encode()):
+        if not user or not user["contraseña"] or not check_password(user["contraseña"], password):
             return self.fail(HTTPStatus.UNAUTHORIZED, "Usuario o contraseña incorrectos.")
         if user["estado"] == "pendiente":
             return self.fail(HTTPStatus.FORBIDDEN, "Su cuenta está pendiente de alta. El administrador de SilverAid la revisará pronto.")
         if user["estado"] not in ("activo", "verificacion"):
             return self.fail(HTTPStatus.FORBIDDEN, "Su cuenta está desactivada. Contacte con el administrador.")
         token = secrets.token_urlsafe(32)
-        sessions[token] = user["usuario"].lower()
+        sessions.add(token, user["usuario"])
         self.send_json(HTTPStatus.OK, {"token": token, "user": public_user(user)})
 
     def change_family(self, actor, elder_name, action, member_name=None, data=None):
@@ -1499,7 +1597,7 @@ class Handler(SimpleHTTPRequestHandler):
         with lock:
             users = read_users()
             user = find_user(users, key)
-            rows = ATTACHMENTS.read()
+            rows = ATTACHMENTS.read(owner=key)
             if kind == "titulos":
                 titles = [t for t in (user.get("adjunto_titulos") or "").split("|") if t]
                 if len(titles) >= MAX_TITLES:
@@ -1510,7 +1608,7 @@ class Handler(SimpleHTTPRequestHandler):
                 user[ATTACHMENT_KINDS[kind][1]] = doc["nombre_archivo"]
             rows = [a for a in rows if a["id"] != f"{key}:{kind}"]
             rows.append({**doc, "clase": kind, "id": f"{key}:{kind}", "usuario": user["usuario"]})
-            ATTACHMENTS.write(rows)
+            ATTACHMENTS.write(rows, owner=key)
             USERS.write(users)
         self.send_json(HTTPStatus.OK, {"user": public_user(user)})
 
@@ -1526,15 +1624,15 @@ class Handler(SimpleHTTPRequestHandler):
             titles = [t for t in (user.get("adjunto_titulos") or "").split("|") if t]
             if not 1 <= n <= len(titles):
                 return self.fail(HTTPStatus.NOT_FOUND, "Ese título no existe.")
-            rows = ATTACHMENTS.read()
-            mine = {a["clase"]: a for a in rows if a["usuario"].lower() == key and a["clase"].startswith("titulos-")}
+            rows = ATTACHMENTS.read(owner=key)
+            mine = {a["clase"]: a for a in rows if a["clase"].startswith("titulos-")}
             rows = [a for a in rows if a not in mine.values()]
             kept = [mine.get(f"titulos-{i}") for i in range(1, len(titles) + 1) if i != n]
             for i, row in enumerate([r for r in kept if r], 1):
                 rows.append({**row, "clase": f"titulos-{i}", "id": f"{key}:titulos-{i}"})
             del titles[n - 1]
             user["adjunto_titulos"] = "|".join(titles)
-            ATTACHMENTS.write(rows)
+            ATTACHMENTS.write(rows, owner=key)
             USERS.write(users)
         self.send_json(HTTPStatus.OK, {"user": public_user(user)})
 
@@ -1603,7 +1701,7 @@ class Handler(SimpleHTTPRequestHandler):
                 if new_password:
                     if len(new_password) < 4 or ";" in new_password or "\n" in new_password:
                         return self.fail(HTTPStatus.BAD_REQUEST, "La nueva contraseña debe tener al menos 4 caracteres y no contener «;».")
-                    account["contraseña"] = new_password
+                    account["contraseña"] = hash_password(new_password)
                 users_changed = True
             elif data.get("createAccount"):
                 account, error = new_account(users, {**data, "name": name}, "cuidador", "activo")
@@ -1617,9 +1715,9 @@ class Handler(SimpleHTTPRequestHandler):
                 cg = {"id": "c" + secrets.token_hex(4), **fields,
                       "usuario": account["usuario"] if account else "", "fecha_registro": now()}
                 rows.append(cg)
-            CAREGIVERS.write(rows)
-            if users_changed:
+            if users_changed:  # primero la cuenta: la ficha se refiere a ella
                 USERS.write(users)
+            CAREGIVERS.write(rows)
         self.send_json(HTTPStatus.OK if cg_id else HTTPStatus.CREATED, {"caregiver": full_caregiver(cg)})
 
     @staticmethod
@@ -1630,24 +1728,75 @@ class Handler(SimpleHTTPRequestHandler):
             return ""
 
 
-def main():
+# Orden de creación e importación: users primero, porque las demás tablas se refieren a sus cuentas.
+TABLES = (USERS, CAREGIVERS, SOS, SERVICES, ATTACHMENTS, STATES, FAMILY)
+
+
+def connect():
     if STORAGE == "mysql":
         wait_for_mysql()
+    elif STORAGE == "mongo":
+        wait_for_mongo()
+
+
+def prepare():
+    """Crea los archivos, tablas o colecciones si no existen y actualiza los datos de versiones anteriores."""
     with lock:
-        # Crea los archivos o tablas si no existen y actualiza los datos de versiones anteriores.
-        for table in (USERS, CAREGIVERS, SOS, SERVICES, ATTACHMENTS, STATES, FAMILY):
+        for table in TABLES:
             table.setup()
+        sessions.setup()
         users = read_users()
         for u in users:  # adultos mayores registrados por un cliente antes de existir el campo «cliente»
             if u["rol"] == "usuario" and not u["cliente"] and u["registrado_por"]:
                 u["cliente"] = u["registrado_por"]
+        hashed = hash_plain_passwords(users)
+        if hashed:
+            print(f"  · {hashed} contraseña(s) en texto plano convertidas a hash")
         USERS.write(users)
         # Solo las cuentas de rol «familiar» son familiares responsables (una versión anterior guardaba también
         # a los clientes en esta tabla).
         FAMILY.write([r for r in FAMILY.read() if (find_user(users, r["familiar"]) or {}).get("rol") == "familiar"])
         migrate_caregivers()
+
+
+def import_into_mongo(source, replace=False):
+    """python server.py import txt|mysql [--replace] (con STORAGE=mongo): copia los datos de los .txt de DATA_DIR
+    o de MySQL a MongoDB. Sin --replace no toca las colecciones que ya tienen datos."""
+    if STORAGE != "mongo":
+        sys.exit("La importación es hacia MongoDB: ejecútela con STORAGE=mongo.")
+    if source not in ("txt", "mysql"):
+        sys.exit("Indique el origen: python server.py import txt|mysql [--replace]")
+    if source == "mysql":
+        wait_for_mysql()
+    wait_for_mongo()
+    with lock:
+        for table in TABLES:
+            name = table.codec.collection
+            table.setup_schema()
+            if table.count() and not replace:
+                print(f"  · {name}: ya tiene datos, no se toca (use --replace para sustituirlos)")
+                continue
+            if source == "txt":
+                if not table.legacy.exists():
+                    print(f"  · {name}: no existe {table.legacy}, se omite")
+                    continue
+                rows = read_text_rows(table.legacy, table.fields)
+            else:
+                rows = MySQLTable(table.filename, table.fields).read()
+            table.import_rows(rows)
+            print(f"  · {name}: {len(rows)} registros importados de {source}")
+    prepare()
+    print(f"Importación terminada en {mongo_store.describe()}.")
+
+
+def main():
+    if len(sys.argv) > 1 and sys.argv[1] == "import":
+        return import_into_mongo(sys.argv[2] if len(sys.argv) > 2 else "", "--replace" in sys.argv)
+    connect()
+    prepare()
     server = ThreadingHTTPServer(("0.0.0.0", PORT), Handler)
-    where = f"MySQL {MYSQL['user']}@{MYSQL['host']}:{MYSQL['port']}/{MYSQL['database']}" if STORAGE == "mysql" else DATA
+    where = (f"MySQL {MYSQL['user']}@{MYSQL['host']}:{MYSQL['port']}/{MYSQL['database']}" if STORAGE == "mysql"
+             else mongo_store.describe() if STORAGE == "mongo" else DATA)
     print(f"SilverAid en http://{'localhost' if HOST in ('127.0.0.1', '0.0.0.0') else HOST}:{PORT}   (datos en {where})")
     print("Pulse Ctrl+C para detener.")
     try:
