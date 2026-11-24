@@ -627,8 +627,11 @@ def validate_document(doc_type, number, whose):
     return doc_type, number, None
 
 
-def document_owner(users, doc_type, number):
-    return next((u for u in users if u.get("tipo_documento") == doc_type and u.get("documento") == number), None)
+def document_owner(users, doc_type, number, role=None):
+    """Cuenta con ese documento (de ese rol, si se indica). Un adulto mayor que se registró a sí mismo comparte su
+    documento con su cuenta de cliente, así que para buscar al adulto mayor hay que pedir el rol «usuario»."""
+    return next((u for u in users if u.get("tipo_documento") == doc_type and u.get("documento") == number
+                 and (role is None or u["rol"] == role)), None)
 
 
 def validate_name(name):
@@ -885,7 +888,7 @@ def sign_up(data, role, registered_by=""):
             error = "Ya hay una cuenta registrada con su documento de identidad."
         elif role == "familiar":
             joined = (find_user(users, str(data.get("joinElder"))) if registered_by and data.get("joinElder")
-                      else document_owner(users, j_type, j_doc))
+                      else document_owner(users, j_type, j_doc, "usuario"))
             if not joined or joined["rol"] != "usuario":
                 error = ("No encontramos a ningún adulto mayor registrado con ese documento. Pídale a su cliente "
                          "(quien contrata SilverAid) que lo registre primero.")
@@ -1476,8 +1479,7 @@ class Handler(SimpleHTTPRequestHandler):
                 # Primero lo que depende de la cuenta (en MongoDB se busca por su ObjectId) y al final la cuenta.
                 drop_sessions(target)
                 FAMILY.write(drop_links(FAMILY.read(), target))
-                if user["rol"] in ATTACHMENT_ROLES:
-                    ATTACHMENTS.write([], owner=target)
+                ATTACHMENTS.write([], owner=target)  # documentos del colaborador o comprobante de pago del cliente
                 STATES.write([], owner=target)
                 users.remove(user)
                 USERS.write(users)
