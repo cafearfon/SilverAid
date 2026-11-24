@@ -12,7 +12,7 @@ Sirve la aplicación y una pequeña API. Los datos se guardan en tres tablas:
                  adjunto_documento;adjunto_pase;adjunto_pension;adjunto_arl;adjunto_rut;adjunto_titulos;adjunto_rethus
                  (ficha del colaborador y del cuidador; los adjuntos, nombre del archivo)
     states       datos de la aplicación de cada usuario (JSON en base64), sincronizados desde IndexedDB
-    attachments  PDF que adjuntan colaboradores y cuidadores al registrarse (documento, pase, RUT, títulos,
+    attachments  PDF que adjuntan colaboradores, cuidadores y el adulto mayor (comprobante de pago) al registrarse (documento, pase, RUT, títulos,
                  RETHUS y certificados de salud, pensión y ARL) en base64
     family       familiares responsables de cada adulto mayor: «adulto» ↔ «familiar» (cuenta de rol familiar),
                  parentesco y estado (activo o pendiente de aprobación). El cliente (users.cliente) va aparte
@@ -298,12 +298,19 @@ USERS = Table(
      "escolaridad", "pase_conduccion", "pase_vehiculo", "pase_categorias", "seguridad_social", "certificado",
      "adjunto_documento", "adjunto_pase", "adjunto_pension", "adjunto_arl",
      # Ficha del cuidador (registro público): escolaridad, certificado y los PDF de RUT, títulos y RETHUS
-     "adjunto_rut", "adjunto_titulos", "adjunto_rethus"],
+     "adjunto_rut", "adjunto_titulos", "adjunto_rethus",
+     # Comprobante de pago (PDF) del adulto mayor que se registra a sí mismo; se guarda en su cuenta de cliente
+     "adjunto_pago",
+     # Salud del adulto mayor que se registra a sí mismo: enfermedades («Diabetes, Hipertensión») y movilidad
+     "enfermedades", "movilidad"],
     seed=[("admin", ADMIN_PASSWORD, "Administrador", "admin", "activo", "", "")],
 )
 
 DOC_TYPES = {"CC": "Cédula de ciudadanía", "CE": "Cédula de extranjería",
              "PA": "Pasaporte", "PPT": "Permiso por protección temporal"}
+# Movilidad del adulto mayor: no limitada, con bastón o caminador, en silla de ruedas o con ayuda de otra persona.
+MOBILITY = {"no": "Sin limitación", "baston": "Bastón o caminador", "silla": "Silla de ruedas",
+            "asistida": "Necesita ayuda de otra persona"}
 BLOOD_TYPES = ("A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-")
 PHONE_RE = re.compile(r"^[0-9+()\-\s]{7,20}$")
 EMAIL_RE = re.compile(r"^[^@\s;]+@[^@\s;]+\.[^@\s;]+$")
@@ -321,11 +328,12 @@ ATTACHMENT_KINDS = {
     "rut": ("rutFile", "adjunto_rut", 300, "su RUT"),
     "titulos": ("titlesFiles", "adjunto_titulos", 300, "su título"),  # lista: un PDF por título
     "rethus": ("rethusFile", "adjunto_rethus", 300, "el certificado del RETHUS"),
+    "pago": ("paymentFile", "adjunto_pago", 300, "el comprobante de pago"),
 }
 # Nombre corto de cada documento (avisos al administrador y al propio usuario).
 KIND_LABELS = {"documento": "Documento de identidad", "pase": "Pase de conducción", "salud": "Certificado de salud",
                "pension": "Certificado de pensión", "arl": "Certificado de ARL", "rut": "RUT",
-               "rethus": "Certificado del RETHUS"}
+               "rethus": "Certificado del RETHUS", "pago": "Comprobante de pago"}
 MAX_TITLES = 5  # títulos que puede adjuntar un cuidador (clases «titulos-1» … «titulos-5»)
 # Roles que adjuntan PDF al registrarse.
 ATTACHMENT_ROLES = ("colaborador", "cuidador")
@@ -477,6 +485,8 @@ def public_user(u):
             "licenseVehicle": u.get("pase_vehiculo", ""),
             "licenseCategories": [c for c in u.get("pase_categorias", "").split(",") if c],
             "socialSecurity": u.get("seguridad_social", ""),
+            "diseases": [d for d in u.get("enfermedades", "").split(",") if d.strip()],
+            "mobility": u.get("movilidad", ""),
             "attachments": user_attachments(u), "requiredDocuments": required_kinds(u),
             "missingDocuments": missing_kinds(u)}
 
@@ -728,6 +738,12 @@ def sign_up(data, role, registered_by=""):
     if role == "cliente":
         # Datos del adulto mayor que registra el cliente.
         if data.get("selfElder"):
+            # El adulto mayor se registra a sí mismo: adjunta el comprobante de pago (PDF, máx. 300 KB).
+            payment, error = decode_pdf(data.get("paymentFile"), "pago")
+            if error:
+                return None, error, None
+            files = {"pago": payment}
+            extra["adjunto_pago"] = payment["nombre_archivo"]
             # El cliente es también el adulto mayor: su ficha usa sus propios datos.
             data = {**data, "elderName": data.get("name"), "elderDocType": doc_type, "elderDocument": doc,
                     "elderAddress": extra["direccion"], "elderMobile": extra["celular"], "elderEmail": extra["email"]}
@@ -747,6 +763,17 @@ def sign_up(data, role, registered_by=""):
             return None, "Escriba la dirección del usuario (adulto mayor).", None
         if not PHONE_RE.match(elder["celular"]):
             return None, "Escriba un celular válido para el usuario (7 a 20 dígitos).", None
+        # Cuestionario de salud: enfermedades (o «Ninguna») y movilidad. Obligatorio en el registro público; el
+        # administrador puede dejarlo para después.
+        diseases = data.get("diseases")
+        diseases = [clean(d, 80).replace(",", " ") for d in diseases] if isinstance(diseases, list) else []
+        diseases = [d for d in diseases if d][:12]
+        mobility = str(data.get("mobility") or "")
+        if not registered_by and not diseases:
+            return None, "Indique qué enfermedades tiene el adulto mayor (o «Ninguna»).", None
+        if (mobility or not registered_by) and mobility not in MOBILITY:
+            return None, "Indique si la movilidad del adulto mayor es limitada.", None
+        elder.update(enfermedades=",".join(diseases)[:255], movilidad=mobility)
         if elder["tipo_sangre"] not in BLOOD_TYPES:
             return None, "Seleccione el tipo de sangre del usuario.", None
         if elder["email"] and not EMAIL_RE.match(elder["email"]):

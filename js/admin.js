@@ -8,7 +8,7 @@
   const ROLE = SAAuth.ROLES;
   const SKILLS = { compania: 'Compañía', compras: 'Compras', tecnologia: 'Tecnología', tramites: 'Trámites' };
   const STATUS = { activo: 'Activo', pendiente: 'Pendiente de alta', inactivo: 'Inactivo', verificacion: 'En verificación' };
-  const DOC_LABELS = { documento: 'Documento de identidad', pase: 'Pase', salud: 'Salud', pension: 'Pensión', arl: 'ARL', rut: 'RUT', rethus: 'RETHUS' };
+  const DOC_LABELS = { documento: 'Documento de identidad', pase: 'Pase', salud: 'Salud', pension: 'Pensión', arl: 'ARL', rut: 'RUT', rethus: 'RETHUS', pago: 'Comprobante de pago' };
   /** Documentos obligatorios que le faltan a un cuidador o colaborador (debajo del estado). */
   const missingText = (u) => (u.missingDocuments?.length
     ? `<span class="sub warn-text">Faltan: ${u.missingDocuments.map((k) => DOC_LABELS[k] || k).join(', ')}</span>` : '');
@@ -238,7 +238,7 @@
         <tr>
           <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span>${docText(c)}</td>
           <td>${c.mobile ? `📱 ${esc(c.mobile)}` : '<span class="muted">Sin celular</span>'}${c.email ? `<span class="sub">${esc(c.email)}</span>` : ''}${c.address ? `<span class="sub">${esc(c.address)}</span>` : ''}</td>
-          <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span></td>
+          <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span>${attachBtn(c, 'pago', 'Pago')}</td>
           <td>${fmt(c.registeredAt)}</td>
           <td>${elders.length
             ? elders.map((e) => `<div class="elder-line">${esc(e.name)} <span class="pill ${e.status}">${STATUS[e.status] || esc(e.status)}</span>
@@ -259,6 +259,10 @@
       : '<tr><td colspan="7" class="empty">Todavía no hay clientes registrados.</td></tr>';
   }
 
+  const MOBILITY = { no: 'Sin limitación', baston: 'Bastón o caminador', silla: 'Silla de ruedas', asistida: 'Necesita ayuda de otra persona' };
+  /** Enfermedades y movilidad que indicó el adulto mayor al registrarse. */
+  const healthText = (u) => (u.diseases?.length ? `<span class="sub">🩺 ${esc(u.diseases.join(', '))}</span>` : '')
+    + (u.mobility ? `<span class="sub">${u.mobility === 'no' ? '🚶' : '♿'} ${esc(MOBILITY[u.mobility] || u.mobility)}</span>` : '');
   const docText = (u) => (u.document ? `<span class="sub">🪪 ${esc(u.docType)} ${esc(u.document)}</span>` : '');
   const noPassword = (u) => (u.hasPassword ? '' : '<span class="sub warn-text">⚠️ Sin contraseña: asígnela en «Editar»</span>');
 
@@ -348,9 +352,11 @@
     $('pending-body').innerHTML = pending.length
       ? pending.map((u) => `
         <tr>
-          <td><strong>${esc(u.name)}</strong>${docText(u)}${noPassword(u)}</td>
+          <td><strong>${esc(u.name)}</strong>${docText(u)}${noPassword(u)}${healthText(u)}</td>
           <td>@${esc(u.username)}</td>
-          <td>${nameOf(u.registeredBy)}</td>
+          <td>${nameOf(u.registeredBy)}${(() => { // comprobante de pago del adulto mayor que se registró a sí mismo
+              const by = users.find((c) => c.username.toLowerCase() === (u.registeredBy || '').toLowerCase());
+              return by ? `<div class="attach-btns">${attachBtn(by, 'pago', 'Pago')}</div>` : ''; })()}</td>
           <td>${fmt(u.registeredAt)}</td>
           <td class="actions">
             <button class="btn ok small" data-approve="${esc(u.username)}">✔ Dar de alta</button>
@@ -372,7 +378,7 @@
         <td><strong>${esc(u.name)}</strong><span class="sub">@${esc(u.username)}</span>${docText(u)}${noPassword(u)}</td>
         <td>${u.phone ? `☎️ ${esc(u.phone)}` : ''}${u.mobile ? `<span class="sub">📱 ${esc(u.mobile)}</span>` : ''}${u.email ? `<span class="sub">${esc(u.email)}</span>` : ''}${!u.phone && !u.mobile ? '<span class="muted">Sin datos</span>' : ''}</td>
         <td>${u.address ? esc(u.address) : '<span class="muted">—</span>'}</td>
-        <td>${u.bloodType ? `<span class="blood">${esc(u.bloodType)}</span>` : '<span class="muted">—</span>'}</td>
+        <td>${u.bloodType ? `<span class="blood">${esc(u.bloodType)}</span>` : '<span class="muted">—</span>'}${healthText(u)}</td>
         <td>${u.client ? nameOf(u.client) : '<span class="muted">Sin asignar</span>'}
           ${(family[u.username] || []).length ? `<span class="sub">👨‍👩‍👧 ${(family[u.username] || []).length} familiar(es) responsable(s)</span>` : ''}</td>
         <td><span class="pill ${u.status}">${STATUS[u.status] || esc(u.status)}</span></td>
@@ -687,12 +693,16 @@
       renderFamilyTab();
     });
     $('pending-body').addEventListener('click', (e) => {
+      const att = e.target.closest('button[data-attach]');
+      if (att) return openAttachment(att.dataset.user, att.dataset.attach, att);
       const b = e.target.closest('button');
       if (!b) return;
       if (b.dataset.approve) setStatus(b.dataset.approve, 'activo');
       if (b.dataset.reject && confirmed(b, '¿Rechazar? Pulse otra vez')) deleteUser(b.dataset.reject);
     });
     $('clients-body').addEventListener('click', (e) => {
+      const att = e.target.closest('button[data-attach]');
+      if (att) return openAttachment(att.dataset.user, att.dataset.attach, att);
       const send = e.target.closest('button[data-send]');
       if (send) return sendCatalog(send.dataset.user, send.dataset.send);
       const b = e.target.closest('button[data-status]');

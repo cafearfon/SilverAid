@@ -75,8 +75,8 @@
 
   /**
    * Arranca el asistente.
-   *   steps: una función por <section class="step"> que devuelve el primer problema { field, msg } o null
-   *          (field: nombre del campo o el propio elemento).
+   *   steps: una función por <section class="step">, sin contar la de «Acceso» (usuario y contraseña, que valida
+   *          este módulo), que devuelve el primer problema { field, msg } o null (field: nombre del campo o el elemento).
    *   body:  async () => datos para /api/register (sin usuario ni contraseña, que añade este módulo).
    */
   function init({ role, steps, body, onShow }) {
@@ -87,6 +87,9 @@
     const prev = form.querySelector('[data-prev]');
     const next = form.querySelector('[data-next]');
     let current = 0;
+    // Validación de cada sección: la de «Acceso» (la que tiene el usuario) la hace este módulo; el resto, `steps` en orden.
+    const pending = [...steps];
+    const checks = sections.map((s) => (s.querySelector('[name="username"]') ? accessProblem : pending.shift()));
 
     bar.innerHTML = sections.map((s, i) => `<li data-i="${i}"><span class="step-num">${i + 1}</span><span class="step-name">${s.dataset.title}</span></li>`).join('');
 
@@ -116,7 +119,7 @@
       showError(msg);
     }
 
-    /** Paso de acceso (último de todas las páginas): usuario y contraseña. */
+    /** Paso de acceso: usuario y contraseña. */
     function accessProblem() {
       const f = form.elements;
       if (!USERNAME.test(f.username.value.trim())) return { field: 'username', msg: 'El usuario debe tener de 3 a 30 caracteres: letras, números, punto, guion o guion bajo.' };
@@ -129,13 +132,13 @@
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const last = current === sections.length - 1;
-      const problem = last ? accessProblem() : steps[current]();
+      const problem = checks[current]();
       if (problem) return fail(problem);
       if (!last) return show(current + 1);
 
       // Antes de enviar se revisan otra vez todos los pasos (por si se cambió algo al volver atrás).
-      for (let i = 0; i < steps.length; i++) {
-        const p = steps[i]();
+      for (let i = 0; i < checks.length; i++) {
+        const p = checks[i]();
         if (p) { show(i); return fail(p); }
       }
       next.disabled = true;

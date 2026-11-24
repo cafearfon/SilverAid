@@ -95,6 +95,29 @@
               <option>B+</option><option>B-</option><option>AB+</option><option>AB-</option>
             </select>
           </label>
+          <!-- Solo en el registro del adulto mayor (?para=mi) -->
+          <div class="step-group" id="health-fields" hidden>
+            <fieldset class="choice-group" id="diseases">
+              <legend>¿Qué enfermedades tiene? *</legend>
+              <label><input type="checkbox" name="disease" value="Hipertensión"> Hipertensión</label>
+              <label><input type="checkbox" name="disease" value="Diabetes"> Diabetes</label>
+              <label><input type="checkbox" name="disease" value="Enfermedad del corazón"> Enfermedad del corazón</label>
+              <label><input type="checkbox" name="disease" value="EPOC o asma"> EPOC o asma</label>
+              <label><input type="checkbox" name="disease" value="Artritis o artrosis"> Artritis o artrosis</label>
+              <label><input type="checkbox" name="disease" value="Osteoporosis"> Osteoporosis</label>
+              <label><input type="checkbox" name="disease" value="Alzheimer o demencia"> Alzheimer o demencia</label>
+              <label><input type="checkbox" name="disease" value="Párkinson"> Párkinson</label>
+              <label><input type="checkbox" name="disease" value="Ninguna"> Ninguna</label>
+            </fieldset>
+            <label>Otras enfermedades (opcional) <input name="otherDiseases" maxlength="150" placeholder="Ej. hipotiroidismo, glaucoma"></label>
+            <fieldset class="choice-group" id="mobility-q">
+              <legend>¿Su movilidad es limitada? *</legend>
+              <label><input type="radio" name="mobility" value="no"> No, me muevo sin ayuda</label>
+              <label><input type="radio" name="mobility" value="baston"> Sí, uso bastón o caminador</label>
+              <label><input type="radio" name="mobility" value="silla"> Sí, uso silla de ruedas</label>
+              <label><input type="radio" name="mobility" value="asistida"> Sí, necesito ayuda de otra persona</label>
+            </fieldset>
+          </div>
         </section>
 
         <section class="step" data-title="Acceso" hidden>
@@ -106,6 +129,13 @@
             </span>
           </label>
           <label>Repita la contraseña * <input name="password2" type="password" autocomplete="new-password" required></label>
+        </section>
+
+        <!-- Solo en el registro del adulto mayor (?para=mi): comprobante de pago del servicio -->
+        <section class="step" data-title="Pago" id="payment-step" hidden>
+          <p class="info-box small-text">Adjunte el comprobante del pago del servicio. SilverAid lo revisará antes de activar sus servicios como adulto mayor.</p>
+          <label class="file-field">Comprobante de pago * <span class="sub">PDF de máximo 300 KB</span>
+            <input type="file" name="paymentFile" accept="application/pdf,.pdf"></label>
         </section>
 
         <p class="form-error" role="alert" hidden></p>
@@ -121,7 +151,7 @@
   <script src="js/auth.js?v=10"></script>
   <script src="js/db.js?v=10"></script>
   <script src="js/pwa.js?v=12"></script>
-  <script src="js/registro.js?v=10"></script>
+  <script src="js/registro.js?v=11"></script>
   <script>
     (function () {
       const f = document.getElementById('reg-form').elements;
@@ -146,13 +176,36 @@
         document.querySelector('.step[data-title="Adulto mayor"]').dataset.title = 'Su salud';
         $('elder-fields').hidden = true;
         $('self-elder-note').hidden = false;
+        $('health-fields').hidden = false;
       } else if (joining) {
         intro('👨‍👩‍👧', 'Registro de familiar responsable', 'Únase a la familia de un adulto mayor que ya está en SilverAid. Su cuenta queda activa al momento; podrá acompañarle cuando su cliente apruebe la solicitud.');
         $('join-fields').hidden = false;
         $('elder-help').hidden = true;
         $('blood-field').hidden = true;
         document.querySelectorAll('.elder-full').forEach((el) => { el.hidden = true; });
+      } else {
+        // Cliente: el mismo cuestionario de salud, sobre el adulto mayor que registra.
+        $('health-fields').hidden = false;
+        $('diseases').querySelector('legend').textContent = '¿Qué enfermedades tiene el adulto mayor? *';
+        $('mobility-q').querySelector('legend').textContent = '¿La movilidad del adulto mayor es limitada? *';
+        const third = { no: 'No, se mueve sin ayuda', baston: 'Sí, usa bastón o caminador', silla: 'Sí, usa silla de ruedas', asistida: 'Sí, necesita ayuda de otra persona' };
+        f.mobility.forEach((r) => { r.nextSibling.textContent = ' ' + third[r.value]; });
       }
+      // «Ninguna» y las demás enfermedades se excluyen entre sí.
+      $('diseases').addEventListener('change', (e) => {
+        if (e.target.name !== 'disease' || !e.target.checked) return;
+        const none = e.target.value === 'Ninguna';
+        f.disease.forEach((c) => { if (c !== e.target && (none || c.value === 'Ninguna')) c.checked = false; });
+      });
+      const healthProblem = (own) => {
+        if (!diseases().length) return { field: f.disease[0], msg: `Marque ${own ? 'sus enfermedades' : 'las enfermedades del adulto mayor'}, o «Ninguna», o escríbalas en «Otras enfermedades».` };
+        if (!f.mobility.value) return { field: f.mobility[0], msg: `Indique si ${own ? 'su movilidad' : 'la movilidad del adulto mayor'} es limitada.` };
+        return null;
+      };
+
+      if (mode !== 'mi') $('payment-step').remove(); // el comprobante de pago solo lo pide el registro del adulto mayor
+      const payment = () => f.paymentFile.files[0];
+      const diseases = () => [...[...f.disease].filter((c) => c.checked).map((c) => c.value), ...(v('otherDiseases') ? [v('otherDiseases')] : [])];
 
       SAReg.init({
         role: joining ? 'familiar' : 'cliente',
@@ -167,7 +220,10 @@
             return null;
           },
           () => {
-            if (self()) return f.elderBloodType.value ? null : { field: 'elderBloodType', msg: 'Seleccione su tipo de sangre.' };
+            if (self()) {
+              if (!f.elderBloodType.value) return { field: 'elderBloodType', msg: 'Seleccione su tipo de sangre.' };
+              return healthProblem(true);
+            }
             if (joining && !f.relation.value) return { field: 'relation', msg: 'Seleccione su parentesco con el adulto mayor.' };
             if (!joining && !v('elderName')) return { field: 'elderName', msg: 'Escriba el nombre completo del adulto mayor.' };
             if (!f.elderDocType.value) return { field: 'elderDocType', msg: 'Seleccione el tipo de documento del adulto mayor.' };
@@ -177,17 +233,24 @@
             if (!PHONE.test(v('elderMobile'))) return { field: 'elderMobile', msg: 'Escriba un celular válido para el adulto mayor.' };
             if (!f.elderBloodType.value) return { field: 'elderBloodType', msg: 'Seleccione el tipo de sangre del adulto mayor.' };
             if (v('elderEmail') && !EMAIL.test(v('elderEmail'))) return { field: 'elderEmail', msg: 'El correo electrónico del adulto mayor no es válido.' };
-            return null;
+            return healthProblem(false);
           },
+          ...(mode === 'mi' ? [() => {
+            if (!payment()) return { field: 'paymentFile', msg: 'Adjunte el comprobante de pago en PDF.' };
+            const msg = SAReg.fileProblem(payment(), 'el comprobante de pago');
+            return msg ? { field: 'paymentFile', msg } : null;
+          }] : []),
         ],
         async body() {
           const own = { name: v('name'), docType: f.docType.value, document: v('document'), address: v('address'), mobile: v('mobile'), email: v('email') };
-          if (self()) return { ...own, selfElder: true, elderBloodType: f.elderBloodType.value };
+          if (self()) return { ...own, selfElder: true, elderBloodType: f.elderBloodType.value,
+            diseases: diseases(), mobility: f.mobility.value, paymentFile: await SAReg.pdfPayload(payment()) };
           if (joining) return { ...own, relation: f.relation.value, elderDocType: f.elderDocType.value, elderDocument: v('elderDocument') };
           return {
             ...own,
             elderName: v('elderName'), elderDocType: f.elderDocType.value, elderDocument: v('elderDocument'),
             elderAddress: v('elderAddress'), elderMobile: v('elderMobile'), elderEmail: v('elderEmail'), elderBloodType: f.elderBloodType.value,
+            diseases: diseases(), mobility: f.mobility.value,
           };
         },
       });
