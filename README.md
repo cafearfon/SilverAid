@@ -163,6 +163,10 @@ STORAGE=mongo ... python server.py import mysql
 
 La primera vez que arranca con una base vacía, importa los `.txt` de `DATA_DIR` si existen (o crea los datos de ejemplo).
 
+**En un NAS con Portainer:** `docker-compose.nas.yml` usa la imagen `python:3.12-slim` con la carpeta del código
+montada, así que no hay que construir nada; para actualizar, copie los archivos nuevos y reinicie `silveraid_app`.
+Las contraseñas van en las variables de entorno de la pila (`MONGO_ROOT_PASSWORD`…), no en el archivo.
+
 **GitHub Pages:** la landing page se ve completa, pero como Pages solo sirve archivos estáticos, allí no hay servidor y no se puede iniciar sesión
 (la página de login lo indica). Para usar el login, ejecute `server.py` en su equipo.
 

@@ -12,3 +12,4 @@ docker-compose.yml
 docker-compose.mongo.yml
 Dockerfile
 .dockerignore
+docker-compose.nas.yml
