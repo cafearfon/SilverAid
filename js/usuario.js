@@ -96,8 +96,18 @@
   SA.onRender(renderHome);
   SA.onRender(renderAppts);
 
+  /** Ordenador (sobremesa o portátil): ratón o touchpad y pantalla ancha. Misma condición que en styles.css. */
+  const DESKTOP = window.matchMedia('(min-width: 900px) and (hover: hover) and (pointer: fine)');
+  function adaptToDevice() {
+    document.body.classList.toggle('is-desktop', DESKTOP.matches);
+    const notify = $('btn-notify');
+    if (!notify.disabled) notify.textContent = `🔔 Activar avisos en este ${DESKTOP.matches ? 'equipo' : 'teléfono'}`;
+  }
+
   document.addEventListener('DOMContentLoaded', () => {
     applySettings();
+    adaptToDevice();
+    DESKTOP.addEventListener('change', adaptToDevice);
 
     // Sesión: muestra el usuario y comprueba con el servidor que sigue siendo válida y del rol correcto.
     $('user-chip').textContent = `👤 ${SA.session.name}`;
