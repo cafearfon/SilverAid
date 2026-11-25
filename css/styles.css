@@ -457,6 +457,17 @@ table.data td.actions.stack .btn + .btn { margin: .35rem 0 0; }
 .avail-grid .slot[aria-pressed="true"] { background: var(--accent); border-color: var(--primary); }
 .avail-grid .slot[aria-pressed="true"]::after { content: "✓"; color: #3B1F0B; font-weight: 700; }
 
+/* Horarios de toma de un medicamento: una fila por horario (hora : minutos ✕) y botón para añadir más */
+.time-field { border: none; padding: 0; margin: 0; min-width: 0; display: grid; gap: .45rem; justify-items: start; }
+.time-field legend { font-weight: 600; padding: 0; margin-bottom: .4rem; }
+.time-rows { display: grid; gap: .45rem; }
+.time-row { display: flex; align-items: center; gap: .4rem; }
+.time-row select { width: 5.2rem; min-height: 2.75rem; font-family: inherit; font-size: 1.1rem; font-weight: 600; color: var(--text); }
+.time-row .icon-btn { min-width: 2.75rem; min-height: 2.75rem; }
+.time-num { min-width: 1.4rem; color: var(--muted); font-weight: 600; }
+.time-sep { font-size: 1.2rem; font-weight: 700; }
+.time-row .icon-btn[hidden] { display: none; }
+
 /* ---------- Página del adulto mayor (usuario.html) ---------- */
 :root:has(body.elder-page) { font-size: 20px; }
 :root:has(body.elder-page.big) { font-size: 24px; }

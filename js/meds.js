@@ -1,6 +1,9 @@
 /* 1. Recordatorio de medicamentos */
 (function () {
   const GRACE = 30; // minutos antes de considerar una dosis olvidada
+  // Listas del selector de horarios al añadir un medicamento: horas 00–23 y minutos de 5 en 5.
+  const HOURS = Array.from({ length: 24 }, (_, h) => String(h).padStart(2, '0'));
+  const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0'));
   const remindedDue = new Set();
 
   const dayLog = () => {
@@ -121,17 +124,59 @@
       markMissed(d);
     });
 
-    document.getElementById('form-med').addEventListener('submit', (e) => {
-      e.preventDefault();
-      const f = e.target;
-      const times = f.times.value.split(/[,\s]+/).filter(Boolean).map((t) => {
-        const m = t.match(/^(\d{1,2})(?::(\d{2}))?$/);
-        if (!m || +m[1] > 23 || +(m[2] || 0) > 59) return null;
-        return `${SA.pad(+m[1])}:${m[2] || '00'}`;
+    const form = document.getElementById('form-med');
+    const rows = form.querySelector('[data-time-rows]');
+    const options = (values, selected) => values.map((v) =>
+      `<option value="${v}"${v === selected ? ' selected' : ''}>${v}</option>`).join('');
+
+    /** Añade una fila hora + minutos; las nuevas proponen 4 h después de la última. */
+    function addTimeRow(hour, minute = '00') {
+      const n = rows.children.length + 1;
+      const row = document.createElement('div');
+      row.className = 'time-row';
+      row.innerHTML = `
+        <span class="time-num">${n}.</span>
+        <select data-h aria-label="Hora del horario ${n}">${options(HOURS, hour)}</select>
+        <span class="time-sep" aria-hidden="true">:</span>
+        <select data-m aria-label="Minutos del horario ${n}">${options(MINUTES, minute)}</select>
+        <button type="button" class="icon-btn" data-del-time title="Quitar este horario" aria-label="Quitar el horario ${n}">✕</button>`;
+      rows.append(row);
+      renumber();
+    }
+
+    function renumber() {
+      [...rows.children].forEach((row, i) => {
+        row.querySelector('.time-num').textContent = `${i + 1}.`;
+        row.querySelector('[data-h]').setAttribute('aria-label', `Hora del horario ${i + 1}`);
+        row.querySelector('[data-m]').setAttribute('aria-label', `Minutos del horario ${i + 1}`);
+        // Siempre queda al menos un horario: con una sola fila no se puede quitar.
+        row.querySelector('[data-del-time]').hidden = rows.children.length === 1;
       });
-      if (!times.length || times.includes(null)) return SA.toast('Escriba las horas así: 08:00, 20:00', 'warn');
-      SA.state.meds.push({ id: SA.uid(), name: f.name.value.trim(), dose: f.dose.value.trim() || '—', times: [...new Set(times)].sort() });
-      SA.save(); f.reset(); SA.renderAll();
+    }
+
+    const readTimes = () => [...rows.children].map((row) =>
+      `${row.querySelector('[data-h]').value}:${row.querySelector('[data-m]').value}`);
+
+    form.querySelector('[data-add-time]').addEventListener('click', () => {
+      const last = readTimes().pop() || '04:00';
+      addTimeRow(SA.pad((+last.slice(0, 2) + 4) % 24), last.slice(3));
+      rows.lastElementChild.querySelector('[data-h]').focus();
+    });
+
+    rows.addEventListener('click', (e) => {
+      const del = e.target.closest('[data-del-time]');
+      if (del) { del.closest('.time-row').remove(); renumber(); }
+    });
+
+    // Al vaciar el formulario vuelve a un solo horario, a las 08:00.
+    form.addEventListener('reset', () => setTimeout(() => { rows.innerHTML = ''; addTimeRow('08'); }));
+    addTimeRow('08');
+
+    form.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const times = [...new Set(readTimes())].sort();
+      SA.state.meds.push({ id: SA.uid(), name: form.name.value.trim(), dose: form.dose.value.trim() || '—', times });
+      SA.save(); form.reset(); SA.renderAll();
       SA.toast('Medicamento añadido.', 'ok');
     });
   });

@@ -15,7 +15,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700;800&display=swap">
-  <link rel="stylesheet" href="css/styles.css?v=15">
+  <link rel="stylesheet" href="css/styles.css?v=17">
   <script src="js/auth.js?v=10"></script>
   <script src="js/db.js?v=10"></script>
   <script src="js/pwa.js?v=13"></script>
@@ -82,7 +82,11 @@
             <h2>Añadir medicamento</h2>
             <label>Nombre <input name="name" required placeholder="Ej. Paracetamol"></label>
             <label>Dosis <input name="dose" placeholder="Ej. 1 comprimido"></label>
-            <label>Horas (separadas por comas) <input name="times" required placeholder="08:00, 20:00"></label>
+            <fieldset class="time-field">
+              <legend>Horarios de toma</legend>
+              <div class="time-rows" data-time-rows></div>
+              <button type="button" class="btn ghost small time-add" data-add-time>＋ Añadir otro horario</button>
+            </fieldset>
             <button class="btn">Añadir</button>
           </form>
         </details>
@@ -153,7 +157,7 @@
   </div>
 
   <script src="js/store.js?v=10"></script>
-  <script src="js/meds.js?v=10"></script>
+  <script src="js/meds.js?v=12"></script>
   <script src="js/sos.js?v=12"></script>
   <script src="js/usuario.js?v=12"></script>
 </body>
