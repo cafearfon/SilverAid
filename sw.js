@@ -13,7 +13,7 @@
 importScripts('js/db.js?v=10');
 
 const BUILD = 'dev'; // server.py → hora de arranque
-const VERSION = `v19-${BUILD}`;
+const VERSION = `v20-${BUILD}`;
 const STATIC = `sa-static-${VERSION}`;
 const PAGES = `sa-pages-${VERSION}`;
 const API = 'sa-api';
@@ -102,10 +102,13 @@ function pageKey(href) {
   return u.origin + (u.pathname.endsWith('/') ? u.pathname + 'index.html' : u.pathname);
 }
 
+/** Copia exacta (misma ?v=) → se responde con ella y se actualiza en segundo plano. Si la página pide una versión
+    que no está guardada (?v= nueva tras un cambio), se va a la red: una copia de otra versión solo se usa sin
+    conexión, porque mezclar una página nueva con un JS o CSS viejo la rompe. */
 async function staleWhileRevalidate(event) {
   const req = event.request;
   const cache = await caches.open(STATIC);
-  const cached = (await cache.match(req)) || (await cache.match(req, { ignoreSearch: true }));
+  const cached = await cache.match(req);
   const network = fetch(req).then((res) => {
     if (res.ok) cache.put(req, res.clone());
     return res;
@@ -114,7 +117,7 @@ async function staleWhileRevalidate(event) {
     event.waitUntil(network.catch(() => {}));
     return cached;
   }
-  return network.catch(() => Response.error());
+  return network.catch(async () => (await cache.match(req, { ignoreSearch: true })) || Response.error());
 }
 
 async function cacheFirst(req, name) {
