@@ -262,7 +262,9 @@
     <!-- ============ ALTAS PENDIENTES ============ -->
     <section id="tab-pending" class="view">
       <h1>⏳ Altas pendientes</h1>
-      <p class="muted">Adultos mayores registrados por su cliente. No pueden iniciar sesión hasta que les dé de alta.</p>
+      <p class="muted">Adultos mayores, familiares y cuidadores que esperan su alta.</p>
+      <h2>👵 Adultos mayores</h2>
+      <p class="muted">Registrados por su cliente. No pueden iniciar sesión hasta que les dé de alta.</p>
       <div class="table-wrap card flush">
         <table class="data">
           <thead><tr><th>Adulto mayor</th><th>Usuario</th><th>Registrado por</th><th>Fecha de registro</th><th>Acciones</th></tr></thead>
@@ -276,6 +278,15 @@
         <table class="data">
           <thead><tr><th>Familiar</th><th>Quiere unirse a</th><th>Parentesco</th><th>Cliente</th><th>Fecha</th><th>Acciones</th></tr></thead>
           <tbody id="family-requests-body"></tbody>
+        </table>
+      </div>
+
+      <h2>🧑‍⚕️ Cuidadores por dar de alta</h2>
+      <p class="muted">Cuidadores que se registraron desde «Crear cuenta» y están en verificación. Solo puede darles de alta cuando hayan subido todos los documentos obligatorios.</p>
+      <div class="table-wrap card flush">
+        <table class="data">
+          <thead><tr><th>Cuidador</th><th>Contacto</th><th>Escolaridad</th><th>Documentos adjuntos</th><th>Fecha de registro</th><th>Acciones</th></tr></thead>
+          <tbody id="cg-pending-body"></tbody>
         </table>
       </div>
     </section>
@@ -462,6 +473,6 @@
 
   <div id="toasts" class="toasts" aria-live="polite"></div>
   <script src="js/availability.js?v=10"></script>
-  <script src="js/admin.js?v=17"></script>
+  <script src="js/admin.js?v=18"></script>
 </body>
 </html>

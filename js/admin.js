@@ -159,6 +159,36 @@
     renderClients();
     renderCollaborators();
     renderCaregiverSignups();
+    renderCaregiverPending();
+  }
+
+  /** Documentos de un cuidador: RUT, seguridad social, RETHUS y cada título. */
+  const caregiverDocs = (c) => [['rut', 'RUT'], ['salud', 'Salud'], ['pension', 'Pensión'], ['arl', 'ARL'], ['rethus', 'RETHUS'],
+    ...Object.keys(c.attachments || {}).filter((k) => k.startsWith('titulos-')).map((k) => [k, 'Título ' + k.split('-')[1]])]
+    .map(([kind, label]) => attachBtn(c, kind, label)).join('') || '<span class="muted">Ninguno</span>';
+
+  /** Cuidadores en verificación (pestaña «Altas pendientes»): dar de alta o rechazar. */
+  function renderCaregiverPending() {
+    const list = users.filter((u) => u.role === 'cuidador' && u.status === 'verificacion');
+    const familyRequests = users.filter((u) => u.role === 'usuario')
+      .reduce((n, u) => n + (family[u.username] || []).filter((m) => m.status === 'pendiente').length, 0);
+    setCount('count-pending', users.filter((u) => u.status === 'pendiente').length + familyRequests + list.length);
+    $('cg-pending-body').innerHTML = list.length
+      ? list.map((c) => `
+        <tr>
+          <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span>${docText(c)}${missingText(c)}</td>
+          <td>${c.mobile ? `📱 ${esc(c.mobile)}` : '<span class="muted">Sin celular</span>'}${c.email ? `<span class="sub">${esc(c.email)}</span>` : ''}${c.address ? `<span class="sub">${esc(c.address)}</span>` : ''}</td>
+          <td>${EDUCATION[c.education] || '<span class="muted">—</span>'}</td>
+          <td><div class="attach-btns">${caregiverDocs(c)}</div></td>
+          <td>${fmt(c.registeredAt)}</td>
+          <td class="actions">
+            ${c.missingDocuments?.length
+              ? '<button class="btn ok small" disabled title="Faltan documentos obligatorios">✔ Dar de alta</button>'
+              : `<button class="btn ok small" data-status="activo" data-user="${esc(c.username)}">✔ Dar de alta</button>`}
+            <button class="btn ghost small" data-reject="${esc(c.username)}">Rechazar</button>
+          </td>
+        </tr>`).join('')
+      : '<tr><td colspan="6" class="empty">✅ No hay cuidadores pendientes de alta.</td></tr>';
   }
 
   /** Cuidadores registrados desde «Crear cuenta»: escolaridad y PDF (RUT, seguridad social, RETHUS y cada título). */
@@ -171,9 +201,7 @@
           <td><strong>${esc(c.name)}</strong><span class="sub">@${esc(c.username)}</span><span class="sub">Registro: ${fmt(c.registeredAt)}</span></td>
           <td>${c.mobile ? `📱 ${esc(c.mobile)}` : '<span class="muted">Sin celular</span>'}${c.email ? `<span class="sub">${esc(c.email)}</span>` : ''}${c.address ? `<span class="sub">${esc(c.address)}</span>` : ''}</td>
           <td>${EDUCATION[c.education] || '<span class="muted">—</span>'}</td>
-          <td><div class="attach-btns">${[['rut', 'RUT'], ['salud', 'Salud'], ['pension', 'Pensión'], ['arl', 'ARL'], ['rethus', 'RETHUS'],
-              ...Object.keys(c.attachments || {}).filter((k) => k.startsWith('titulos-')).map((k) => [k, 'Título ' + k.split('-')[1]])]
-            .map(([kind, label]) => attachBtn(c, kind, label)).join('') || '<span class="muted">Ninguno</span>'}</div></td>
+          <td><div class="attach-btns">${caregiverDocs(c)}</div></td>
           <td><span class="pill ${c.status}">${STATUS[c.status] || esc(c.status)}</span>${missingText(c)}</td>
           <td class="actions">${c.status === 'activo'
             ? `<button class="btn ghost small" data-status="inactivo" data-user="${esc(c.username)}">Inactivar</button>`
@@ -481,7 +509,6 @@
     const rows = [];
     users.filter((u) => u.role === 'usuario').forEach((u) => (family[u.username] || [])
       .filter((m) => m.status === 'pendiente').forEach((m) => rows.push({ elder: u, m })));
-    setCount('count-pending', users.filter((u) => u.status === 'pendiente').length + rows.length);
     $('family-requests-body').innerHTML = rows.length
       ? rows.map(({ elder, m }) => `
         <tr>
@@ -698,6 +725,14 @@
       const b = e.target.closest('button');
       if (!b) return;
       if (b.dataset.approve) setStatus(b.dataset.approve, 'activo');
+      if (b.dataset.reject && confirmed(b, '¿Rechazar? Pulse otra vez')) deleteUser(b.dataset.reject);
+    });
+    $('cg-pending-body').addEventListener('click', (e) => {
+      const att = e.target.closest('button[data-attach]');
+      if (att) return openAttachment(att.dataset.user, att.dataset.attach, att);
+      const b = e.target.closest('button');
+      if (!b) return;
+      if (b.dataset.status) setStatus(b.dataset.user, b.dataset.status);
       if (b.dataset.reject && confirmed(b, '¿Rechazar? Pulse otra vez')) deleteUser(b.dataset.reject);
     });
     $('clients-body').addEventListener('click', (e) => {
